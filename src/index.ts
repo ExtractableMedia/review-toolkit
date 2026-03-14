@@ -61,10 +61,11 @@ function parseFindings(content: string): Finding[] {
   const lines = content.split("\n");
   const findings: Finding[] = [];
 
-  // Match: ### F<n> <severity> - <title>
-  // Also handles resolved: ### F<n> ~~<severity> - <title>~~ <status>
+  // Match: ### F<n> <severity> <dash> <title>
+  // Accepts hyphen (-), en dash (–), or em dash (—) as separator
+  // Also handles resolved: ### F<n> ~~<severity> <dash> <title>~~ <status>
   const headingRe =
-    /^###\s+(F\d+)\s+(?:~~)?([🔴🟠🟡🟢ℹ️]+\s+(?:Critical|High Priority|Medium Priority|Low Priority|Nice-to-Have|Observation)\s*)-\s*(.+?)(?:~~\s*[✅🚫⏸️].*)?$/u;
+    /^###\s+(F\d+)\s+(?:~~)?([🔴🟠🟡🟢ℹ️]+\s+(?:Critical|High Priority|Medium Priority|Low Priority|Nice-to-Have|Observation)\s*)[-–—]\s*(.+?)(?:~~\s*[✅🚫⏸️].*)?$/u;
 
   for (let i = 0; i < lines.length; i++) {
     const match = lines[i].match(headingRe);
@@ -92,15 +93,6 @@ function parseFindings(content: string): Finding[] {
   }
 
   return findings;
-}
-
-/**
- * Truncates body text to avoid overwhelming the elicitation dialog.
- */
-function truncateBody(body: string, maxLines = 12): string {
-  const lines = body.split("\n");
-  if (lines.length <= maxLines) return body;
-  return lines.slice(0, maxLines).join("\n") + "\n... (truncated)";
 }
 
 // ---------------------------------------------------------------------------
@@ -258,117 +250,164 @@ mcpServer.tool(
     // Triage loop — present each finding via elicitation
     const decisions: Decision[] = [];
     let currentContent = content;
+    let cancelled = false;
 
-    for (let i = 0; i < findings.length; i++) {
+    for (let i = 0; i < findings.length && !cancelled; i++) {
       const finding = findings[i];
       const progress = `${i + 1} of ${findings.length}`;
+      const header =
+        `${finding.id} ${finding.severity} — ${finding.title}`;
 
-      // Elicitation #1: Present finding with action menu
-      const result = await mcpServer.server.elicitInput({
-        mode: "form",
-        message:
-          `── Finding ${progress} ──────────────────────────\n` +
-          `${finding.id} ${finding.severity} — ${finding.title}\n\n` +
-          `${truncateBody(finding.body)}`,
-        requestedSchema: {
-          type: "object" as const,
-          properties: {
-            action: {
-              type: "string",
-              title: "Action",
-              description: "What should happen with this finding?",
-              oneOf: [
-                { const: "fix", title: "Fix — dispatch agent to resolve" },
-                {
-                  const: "fix_guided",
-                  title: "Fix with guidance — add context for the agent",
-                },
-                {
-                  const: "accept",
-                  title: "Accept — mark as acceptable, no fix needed",
-                },
-                { const: "defer", title: "Defer — address later" },
-                { const: "ignore", title: "Ignore — won't fix" },
-                { const: "skip", title: "Skip — decide later" },
-              ],
-            },
-          },
-          required: ["action"],
-        },
-      });
+      // Build a short summary for the initial message. Extract the
+      // first meaningful line from the body (usually **File:** or
+      // **Location:**) so the user has minimal context at a glance.
+      const summaryLine = finding.body
+        .split("\n")
+        .find((l) => l.trim().length > 0) ?? "";
 
-      // Handle decline/cancel — stop triage loop
-      if (result.action !== "accept" || !result.content) {
-        decisions.push({
-          finding: finding.id,
-          action: "skip",
-          guidance: null,
-          severity: finding.severity,
-          title: finding.title,
-        });
-        // User cancelled — break out of loop entirely
-        if (result.action === "cancel") break;
-        continue;
-      }
-
-      const action = (result.content as Record<string, unknown>)
-        .action as Action;
-
-      // Elicitation #2: If fix_guided, collect guidance text
-      let guidance: string | null = null;
-      if (action === "fix_guided") {
-        const guidanceResult = await mcpServer.server.elicitInput({
+      // Action selection loop — re-presents after "View details"
+      let decided = false;
+      while (!decided) {
+        const result = await mcpServer.server.elicitInput({
           mode: "form",
           message:
-            `Guidance for fixing ${finding.id}: ${finding.title}\n\n` +
-            `Provide additional context or instructions for the agent:`,
+            `── Finding ${progress} ── ${header}. ${summaryLine}`,
           requestedSchema: {
             type: "object" as const,
             properties: {
-              guidance: {
+              action: {
                 type: "string",
-                title: "Guidance",
-                description:
-                  "Instructions or context for fixing this finding",
+                title: "Action",
+                description: "What should happen with this finding?",
+                oneOf: [
+                  {
+                    const: "details",
+                    title: "View details — see full finding text",
+                  },
+                  {
+                    const: "fix",
+                    title: "Fix — dispatch agent to resolve",
+                  },
+                  {
+                    const: "fix_guided",
+                    title:
+                      "Fix with guidance — add context for the agent",
+                  },
+                  {
+                    const: "accept",
+                    title: "Accept — mark as acceptable, no fix needed",
+                  },
+                  { const: "defer", title: "Defer — address later" },
+                  { const: "ignore", title: "Ignore — won't fix" },
+                  { const: "skip", title: "Skip — decide later" },
+                ],
               },
             },
-            required: ["guidance"],
+            required: ["action"],
           },
         });
-        if (
-          guidanceResult.action === "accept" &&
-          guidanceResult.content
-        ) {
-          guidance = (guidanceResult.content as Record<string, unknown>)
-            .guidance as string;
+
+        // Handle decline/cancel
+        if (result.action !== "accept" || !result.content) {
+          decisions.push({
+            finding: finding.id,
+            action: "skip",
+            guidance: null,
+            severity: finding.severity,
+            title: finding.title,
+          });
+          if (result.action === "cancel") cancelled = true;
+          decided = true;
+          continue;
         }
-      }
 
-      decisions.push({
-        finding: finding.id,
-        action,
-        guidance,
-        severity: finding.severity,
-        title: finding.title,
-      });
+        const action = (result.content as Record<string, unknown>)
+          .action as string;
 
-      // Update file for accept/defer/ignore actions
-      if (
-        update_file &&
-        (action === "accept" || action === "defer" || action === "ignore")
-      ) {
-        currentContent = markFinding(currentContent, finding, action);
-        writeFileSync(absPath, currentContent, "utf-8");
-        // Re-parse to get updated line numbers for subsequent findings
-        const updatedFindings = parseFindings(currentContent);
-        for (let j = i + 1; j < findings.length; j++) {
-          const updated = updatedFindings.find(
-            (f) => f.id === findings[j].id,
-          );
-          if (updated) {
-            findings[j] = updated;
+        // "View details" — show full body, then loop back to action menu
+        if (action === "details") {
+          await mcpServer.server.elicitInput({
+            mode: "form",
+            message:
+              `── ${header} ──\n\n${finding.body}`,
+            requestedSchema: {
+              type: "object" as const,
+              properties: {
+                _ack: {
+                  type: "boolean",
+                  title: "Return to action menu",
+                  default: true,
+                },
+              },
+            },
+          });
+          // Loop back to action selection
+          continue;
+        }
+
+        // "Fix with guidance" — collect guidance text
+        let guidance: string | null = null;
+        if (action === "fix_guided") {
+          const guidanceResult = await mcpServer.server.elicitInput({
+            mode: "form",
+            message: `Guidance for fixing ${finding.id}: ${finding.title}`,
+            requestedSchema: {
+              type: "object" as const,
+              properties: {
+                guidance: {
+                  type: "string",
+                  title: "Guidance",
+                  description:
+                    "Instructions or context for fixing this finding",
+                },
+              },
+              required: ["guidance"],
+            },
+          });
+          if (
+            guidanceResult.action === "accept" &&
+            guidanceResult.content
+          ) {
+            guidance = (
+              guidanceResult.content as Record<string, unknown>
+            ).guidance as string;
           }
         }
+
+        decisions.push({
+          finding: finding.id,
+          action: action as Action,
+          guidance,
+          severity: finding.severity,
+          title: finding.title,
+        });
+
+        // Update file for accept/defer/ignore actions
+        if (
+          update_file &&
+          (action === "accept" ||
+            action === "defer" ||
+            action === "ignore")
+        ) {
+          currentContent = markFinding(
+            currentContent,
+            finding,
+            action as "accept" | "defer" | "ignore",
+          );
+          writeFileSync(absPath, currentContent, "utf-8");
+          // Re-parse to get updated line numbers for subsequent findings
+          const updatedFindings = parseFindings(currentContent);
+          for (let j = i + 1; j < findings.length; j++) {
+            const updated = updatedFindings.find(
+              (f) => f.id === findings[j].id,
+            );
+            if (updated) {
+              findings[j] = updated;
+            }
+          }
+        }
+
+        decided = true;
       }
     }
 
