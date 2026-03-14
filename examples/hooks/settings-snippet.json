@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Add these hook entries to your .claude/settings.json to enable triage automation",
+  "hooks": {
+    "Elicitation": [
+      {
+        "matcher": "mcp-review-triage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/path/to/auto-skip-low-priority.sh"
+          }
+        ]
+      }
+    ],
+    "ElicitationResult": [
+      {
+        "matcher": "mcp-review-triage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/path/to/log-triage-decisions.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

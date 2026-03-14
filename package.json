@@ -1,0 +1,43 @@
+{
+  "name": "mcp-review-triage",
+  "version": "0.1.0",
+  "description": "MCP server for interactive triage of review findings using elicitation",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-review-triage": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "code-review",
+    "triage",
+    "elicitation"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cirm-github/mcp-review-triage.git"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}
