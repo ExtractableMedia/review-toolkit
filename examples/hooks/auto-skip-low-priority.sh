@@ -12,7 +12,7 @@
 #   "hooks": {
 #     "Elicitation": [
 #       {
-#         "matcher": "mcp-review-triage",
+#         "matcher": "review-toolkit",
 #         "hooks": [
 #           {
 #             "type": "command",

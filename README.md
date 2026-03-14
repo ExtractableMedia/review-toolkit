@@ -1,16 +1,14 @@
-# mcp-review-triage
+# review-toolkit
 
-An [MCP](https://modelcontextprotocol.io/) server that provides interactive
-triage of code review findings using
+A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins)
+that provides structured code review commands and interactive triage using
 [MCP elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation).
 
-Instead of reviewing all findings at once and typing "fix F1, F3, ignore F7",
-this server presents each finding one at a time with a structured action menu —
-similar to `git add --patch` for code reviews.
-
-**Partially addresses:**
-[anthropics/claude-code#32724](https://github.com/anthropics/claude-code/issues/32724)
-(Interactive review loops for slash commands)
+**Includes:**
+- `/local-review` — multi-agent code review with configurable reviewers
+- `/doc-review` — document quality review
+- `/triage` — interactive finding triage (`git add --patch` for code reviews)
+- 4 bundled reviewer agents (code quality, security, testing, documentation)
 
 ## Requirements
 
@@ -20,91 +18,175 @@ similar to `git add --patch` for code reviews.
 ## Install
 
 ```bash
-# Clone and build
-git clone https://github.com/cirm-github/mcp-review-triage.git
-cd mcp-review-triage
+claude plugin install ExtractableMedia/review-toolkit
+```
+
+### Manual install (development)
+
+```bash
+git clone https://github.com/ExtractableMedia/review-toolkit.git
+cd review-toolkit
 npm install
 npm run build
 
-# Register with Claude Code (user-scoped, available in all projects)
-claude mcp add --scope user mcp-review-triage -- node /path/to/mcp-review-triage/dist/index.js
+# Test locally without installing
+claude --plugin-dir /path/to/review-toolkit
 ```
 
-## Usage
+## Commands
 
-### With the `/triage` slash command
+### `/local-review`
 
-Copy `examples/triage.md` to `~/.claude/commands/triage.md`, then:
+Dispatches multiple reviewer agents in parallel to analyze your branch changes,
+then collates findings into a single `local-review.md` with numbered findings,
+severity indicators, and a pre-merge checklist.
 
 ```
+/local-review
+/local-review HEAD~3..HEAD
+/local-review app/controllers/
+```
+
+**Built-in reviewers** (always dispatched):
+
+| Agent | Focus |
+|-------|-------|
+| `code-best-practices-reviewer` | Code quality, SOLID, DRY, naming, complexity |
+| `security-reviewer` | OWASP Top 10, injection, auth, data exposure |
+| `test-suite-architect` | Test coverage gaps, test quality, strategy |
+| `documentation-expert` | Collates all findings into the review document |
+
+**Project-specific reviewers** are configured via `.claude/review-config.md`
+(see [Configuration](#project-configuration) below).
+
+### `/doc-review`
+
+Reviews a document for formatting, consistency, accuracy, clarity, sensitive
+information, spelling/grammar, and staleness.
+
+```
+/doc-review README.md
+/doc-review docs/architecture.md
+```
+
+Outputs a `*-DOC-REVIEW.md` file with numbered findings using the same
+format as `/local-review`.
+
+### `/triage`
+
+Interactively triage findings from a review file, presenting each finding one
+at a time with an action menu via MCP elicitation.
+
+```
+/triage
 /triage local-review.md
 /triage my-doc-DOC-REVIEW.md
 ```
 
-### Direct tool call
+**Actions per finding:**
+- **Fix** — dispatch agent to resolve after triage
+- **Fix with guidance** — add context for the fixing agent
+- **Accept** — mark as acceptable (no fix needed)
+- **Defer** — address later
+- **Ignore** — won't fix
+- **Skip** — decide later
 
-The server exposes a single tool: `triage_findings`
+The tool updates the review file in place with status markers for
+accept/defer/ignore decisions.
 
-**Parameters:**
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `file_path` | string | (required) | Absolute path to the review file |
-| `severity_filter` | string[] | all | Filter: `critical`, `high`, `medium`, `low` |
-| `update_file` | boolean | `true` | Update file with status markers |
+## Bundled Agents
 
-### Interaction flow
+The plugin ships 4 generic reviewer agents that work across any codebase:
 
-For each unresolved finding, you'll see an elicitation dialog:
+| Agent | Purpose |
+|-------|---------|
+| `code-best-practices-reviewer` | Code organization, SOLID, DRY, naming, error handling |
+| `security-reviewer` | OWASP Top 10, injection, auth, data exposure, dependencies |
+| `test-suite-architect` | Test creation, coverage analysis, test strategy, refactoring |
+| `documentation-expert` | Review collation, document formatting, merge logic |
 
-```
-── Finding 1 of 5 ──────────────────────────
-F1 🔴 Critical — SQL injection in search controller
+Framework-specific agents (Rails, PostgreSQL, etc.) are **not bundled** — add
+them to your project via `.claude/review-config.md`.
 
-**File:** `app/controllers/search_controller.rb` (line 23)
-**Issue:** User input is interpolated directly into a SQL query...
+## Project Configuration
 
-Action: [Fix | Fix with guidance | Accept | Defer | Ignore | Skip]
-```
+Create `.claude/review-config.md` in your project to add specialized reviewers
+beyond the 4 built-in ones. The config supports two sections:
 
-**Actions:**
-- **Fix** → Claude resolves the finding after triage completes
-- **Fix with guidance** → Opens a second dialog for instructions, then Claude
-  resolves with that context
-- **Accept** → Marks as acceptable in the review file (✅)
-- **Defer** → Marks as deferred (⏸️)
-- **Ignore** → Marks as ignored (🚫)
-- **Skip** → Moves to next finding without recording a decision
+### Always Run
 
-## Compatible review formats
-
-The server parses the heading format produced by common Claude Code review
-commands:
+Agents dispatched on every review:
 
 ```markdown
-### F1 🟡 Medium Priority - Finding title
+## Always Run
 
-**File:** `path/to/file.rb` (line 42)
+### ruby-on-rails-expert
+- Rails conventions, Active Record patterns, controller design
+- Model responsibilities, performance considerations
+```
+
+### Conditional
+
+Agents dispatched only when the change set includes files matching trigger
+patterns:
+
+```markdown
+## Conditional
+
+### ui-ux-design-specialist
+**Trigger:** `app/views/**`, `app/assets/stylesheets/**`,
+`app/javascript/**`, `spec/system/**`
+- Visual consistency, accessibility, responsive design
+- User feedback, interaction patterns
+
+### postgresql-expert
+**Trigger:** `db/migrate/**`, `db/schema.rb`
+- Migration safety, index strategy, data type choices
+```
+
+Configured agents must be available in the project's `.claude/agents/`
+directory or the user's `~/.claude/agents/`.
+
+See `examples/review-config.md` for a complete example.
+
+## Finding Format
+
+All review commands use the same output format:
+
+```markdown
+### F1 🟡 Medium Priority - Missing input validation
+
+**File:** `app/controllers/users_controller.rb` (line 45)
 **Issue:** Description of the problem
 **Suggestion:** How to fix it
 ```
 
-Already-resolved findings (with `~~strikethrough~~` and status icons) are
-automatically skipped.
+**Severity indicators:**
+- 🔴 Critical — must fix
+- 🟠 High Priority — should fix before merge
+- 🟡 Medium Priority — should address
+- 🟢 Low Priority — can address later
+- ℹ️ Observation — positive note, no action needed
 
-## Hooks (v2.1.76+)
+**Status markers** (applied when findings are resolved):
+- `~~heading~~ ✅ Fixed`
+- `~~heading~~ 🚫 Ignored`
+- `~~heading~~ ⏸️ Deferred`
+
+## Hooks
 
 Claude Code's `Elicitation` and `ElicitationResult` hooks can customize triage
 behavior. See `examples/hooks/` for:
 
 ### Auto-skip low-priority findings
 
-`examples/hooks/auto-skip-low-priority.sh` — Automatically skips 🟢 Low
+`examples/hooks/auto-skip-low-priority.sh` — automatically skips 🟢 Low
 Priority findings so you only see Critical/High/Medium in the interactive
 triage.
 
 ### Log triage decisions
 
-`examples/hooks/log-triage-decisions.sh` — Appends every triage decision to
+`examples/hooks/log-triage-decisions.sh` — appends every triage decision to
 `~/.claude/triage-log.jsonl` for auditing.
 
 ### Configuration
@@ -116,7 +198,7 @@ Add hooks to your `.claude/settings.json`:
   "hooks": {
     "Elicitation": [
       {
-        "matcher": "mcp-review-triage",
+        "matcher": "review-toolkit",
         "hooks": [
           {
             "type": "command",
@@ -129,10 +211,14 @@ Add hooks to your `.claude/settings.json`:
 }
 ```
 
-## How it works
+## How It Works
 
 ```
-/local-review  →  produces local-review.md
+/local-review  →  dispatches reviewer agents in parallel
+                       ↓
+               documentation-expert collates findings
+                       ↓
+               writes local-review.md
                        ↓
 /triage  →  calls MCP tool "triage_findings"
                        ↓
@@ -150,19 +236,12 @@ Add hooks to your `.claude/settings.json`:
               Claude fixes findings marked "fix"
 ```
 
-## Limitations
+## Development
 
-This is a partial solution for
-[#32724](https://github.com/anthropics/claude-code/issues/32724). What's **not**
-covered:
-
-- **Frontmatter-driven configuration** — The issue proposes declarative
-  `review:` blocks in slash command frontmatter. This requires Claude Code core
-  changes.
-- **In-loop agent dispatch** — Fix agents run _after_ the triage loop
-  completes, not during each item.
-- **Native slash command integration** — Requires manually calling `/triage`
-  after a review command finishes.
+```bash
+npm install
+npm run build
+```
 
 ## License
 

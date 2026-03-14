@@ -1,0 +1,11 @@
+{
+  "name": "review-toolkit",
+  "version": "0.1.0",
+  "description": "Code review + interactive triage with MCP elicitation",
+  "author": { "name": "mattmenefee" },
+  "repository": "https://github.com/ExtractableMedia/review-toolkit",
+  "license": "MIT",
+  "commands": "./commands",
+  "agents": "./agents",
+  "mcpServers": "./.mcp.json"
+}

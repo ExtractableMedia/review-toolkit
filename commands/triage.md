@@ -16,7 +16,7 @@ file to triage.
 
 ## Triage Process
 
-Call the `mcp__mcp-review-triage__triage_findings` MCP tool with the resolved
+Call the `mcp__review-toolkit__triage_findings` MCP tool with the resolved
 file path. This will present each unresolved finding via an interactive
 elicitation dialog where the user can choose:
 
@@ -40,6 +40,6 @@ After the triage tool returns:
    - Read the full finding from the review file for context
    - Make the code changes to resolve the finding
    - If guidance was provided, follow that guidance
-   - After fixing, update the review file to mark the finding as ✅ Fixed
+   - After fixing, update the review file to mark the finding as Fixed
 3. **Skip if none to fix** — If no findings were marked for fixing, just
    report the triage summary and note that the review file has been updated

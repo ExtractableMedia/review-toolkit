@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * MCP Review Triage Server
+ * Review Toolkit MCP Server
  *
  * Provides interactive triage of review findings (from /doc-review,
  * /local-review, etc.) using MCP elicitation for per-item action menus.
@@ -145,7 +145,7 @@ function markFinding(
 
 const mcpServer = new McpServer(
   {
-    name: "mcp-review-triage",
+    name: "review-toolkit",
     version: "0.1.0",
   },
   {
