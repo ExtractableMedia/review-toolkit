@@ -28,6 +28,10 @@ present each unresolved finding via an interactive elicitation dialog where the 
 
 The tool automatically updates the review file with status markers for accept/defer/ignore actions.
 
+`${CLAUDE_PLUGIN_ROOT}/reference/finding-format.md` defines the status markers and the strikethrough
+convention. Follow it when marking a finding by hand, so triaged findings match the ones the review
+commands wrote.
+
 ## Post-Triage
 
 After the triage tool returns:
