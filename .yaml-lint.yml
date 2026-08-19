@@ -1,0 +1,20 @@
+# yamllint configuration for this repository. super-linter finds this file by name. To run the same
+# rules locally: `yamllint -c .yaml-lint.yml .`
+
+extends: default
+
+ignore: |
+  node_modules/
+
+rules:
+  # Trailing comments here use one space, not yamllint's two: `key: value # why`.
+  comments:
+    min-spaces-from-content: 1
+
+  # Nothing here opens with `---`, and adding it would change nothing about how these files parse.
+  document-start: disable
+
+  # The same 100-column limit .markdown-lint.yml sets for prose.
+  line-length:
+    max: 100
+    level: warning

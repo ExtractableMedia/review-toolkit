@@ -1,0 +1,51 @@
+name: CI
+
+on: # yamllint disable-line rule:truthy
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # super-linter resolves the default branch when it starts and aborts if that ref is not
+          # present, which it is not in the shallow clone actions/checkout makes by default. This is
+          # needed even though VALIDATE_ALL_CODEBASE below means no changed-file diff is computed.
+          fetch-depth: 0
+
+      - name: Run the linters
+        uses: super-linter/super-linter/slim@v8.7.0
+        env:
+          # To report GitHub Actions status checks
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
+
+          # Validate every file, not only the ones a branch touched, so drift in untouched files is
+          # caught too — the tree is small enough that a full pass costs no more than a diff would.
+          VALIDATE_ALL_CODEBASE: true
+          VALIDATE_BASH: true
+          VALIDATE_GITHUB_ACTIONS: true
+          VALIDATE_GITLEAKS: true
+          VALIDATE_GIT_MERGE_CONFLICT_MARKERS: true
+          VALIDATE_JSON: true
+          VALIDATE_MARKDOWN: true
+          VALIDATE_YAML: true
+
+          # The linter configs sit at the repository root rather than in .github/linters, which is
+          # where super-linter looks by default. Their filenames are already super-linter's
+          # defaults, so the per-linter *_CONFIG_FILE variables do not need setting.
+          LINTER_RULES_PATH: /
