@@ -1,6 +1,7 @@
 ---
 name: code-best-practices-reviewer
 description: Expert code review agent that analyzes code for quality, maintainability, performance, security, and adherence to established conventions. Use for post-implementation reviews, pull request feedback, or code quality improvements.
+tools: Read, Grep, Glob, Bash
 color: orange
 ---
 
