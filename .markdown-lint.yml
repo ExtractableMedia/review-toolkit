@@ -10,6 +10,10 @@ MD013:
   tables: false
   code_blocks: false
 
+# A changelog repeats "### Changed" under every version; duplicates only mislead between siblings.
+MD024:
+  siblings_only: true
+
 # Off deliberately: MD060 pads every cell out to the widest in its column, so a one-cell edit
 # re-pads the whole table without changing how it renders.
 MD060: false
