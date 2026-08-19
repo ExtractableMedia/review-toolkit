@@ -1,0 +1,15 @@
+# Markdown style for this repository. super-linter finds this file by name. To run the same rules
+# locally: `npx markdownlint-cli --config .markdown-lint.yml '**/*.md'`, using the version
+# super-linter ships — an older one can lack a rule and call this repository clean when CI does not.
+
+default: true
+
+# Wrapping a table row stops it being a table; wrapping a command stops it being runnable.
+MD013:
+  line_length: 100
+  tables: false
+  code_blocks: false
+
+# Off deliberately: MD060 pads every cell out to the widest in its column, so a one-cell edit
+# re-pads the whole table without changing how it renders.
+MD060: false
