@@ -1,25 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Add these hook entries to your .claude/settings.json to enable triage automation",
+  "_comment": "Add this hook entry to .claude/settings.json to audit triage decisions. Point the command at your copy of log-triage-decisions.sh.",
   "hooks": {
-    "Elicitation": [
+    "PostToolUse": [
       {
-        "matcher": "review-toolkit",
+        "matcher": "AskUserQuestion",
         "hooks": [
           {
             "type": "command",
-            "command": "/path/to/auto-skip-low-priority.sh"
-          }
-        ]
-      }
-    ],
-    "ElicitationResult": [
-      {
-        "matcher": "review-toolkit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/path/to/log-triage-decisions.sh"
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/log-triage-decisions.sh"
           }
         ]
       }

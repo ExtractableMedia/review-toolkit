@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "extractable-media",
+  "description": "Claude Code plugins from Extractable Media",
+  "owner": {
+    "name": "Extractable Media",
+    "url": "https://github.com/ExtractableMedia"
+  },
+  "plugins": [
+    {
+      "name": "review-toolkit",
+      "source": "./",
+      "category": "code-quality",
+      "tags": ["code-review", "document-review", "triage", "subagents"]
+    }
+  ]
+}

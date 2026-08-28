@@ -1,3 +1,8 @@
+# Personal Claude Code settings. The shared ones belong in .claude/settings.json, which is checked
+# in; this file holds per-user overrides and "don't ask again" permission approvals.
+**/.claude/settings.local.json
+
+# Not a Node project anymore, but the CI workflow installs a Node CLI and
+# debugging that locally leaves these behind where `git add -A` would stage them.
 node_modules/
-dist/
 *.tgz
