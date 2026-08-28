@@ -1,0 +1,129 @@
+name: Validate
+
+on: # yamllint disable-line rule:truthy
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseding a pull request run is right; superseding a push to the default branch is not.
+  # `claude plugin marketplace add` installs from that branch rather than a release artifact, so
+  # every commit on it needs a validation record of its own — a cancelled conclusion is not a
+  # passing one.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor exercises README's "v2.1.145 or later" claim, which was otherwise an untested
+        # assertion; latest gives early warning when a CLI release changes what --strict accepts.
+        claude-version: ['2.1.145', 'latest']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Node is only needed to install the Claude Code CLI below, so track whatever the current
+          # LTS is. Dependabot bumps the action itself but never this input, so a pinned major would
+          # sit here until someone noticed it had gone end-of-life.
+          node-version: 'lts/*'
+
+      - name: Install Claude Code
+        # Version comes from the matrix because this is a `run:` argument, which Dependabot's
+        # github-actions ecosystem cannot see. --ignore-scripts blocks lifecycle scripts across the
+        # whole dependency tree; this package genuinely needs its own postinstall to fetch the
+        # native binary, so run exactly that one afterwards rather than trusting every transitive
+        # package's. Installing with --ignore-scripts alone leaves a CLI that errors with "native
+        # binary not installed".
+        run: |
+          npm install -g --ignore-scripts "@anthropic-ai/claude-code@${{ matrix.claude-version }}"
+          node "$(npm root -g)/@anthropic-ai/claude-code/install.cjs"
+          claude --version
+
+      - name: Validate marketplace manifest
+        run: claude plugin validate . --strict
+
+      # `claude plugin validate` checks whichever manifest it finds first, and marketplace.json
+      # wins. Validate the plugin manifest and component frontmatter from a copy that doesn't have
+      # one.
+      - name: Validate plugin manifest
+        run: |
+          # Copy the whole tree rather than naming component directories: a hand-kept list is a
+          # second manifest of the layout that nothing checks, and validating a subset still passes,
+          # so an omission is invisible.
+          dest="$RUNNER_TEMP/plugin-check"
+          rsync -a --exclude .git/ ./ "$dest/"
+          rm "$dest/.claude-plugin/marketplace.json"
+          claude plugin validate "$dest" --strict
+
+      - name: Check bundled scripts are executable
+        run: |
+          # nullglob so a stale path reports as a stale glob rather than running the loop once on
+          # the literal pattern and blaming the filesystem.
+          shopt -s nullglob globstar
+          scripts=(skills/**/*.sh examples/**/*.sh scripts/**/*.sh)
+          [ ${#scripts[@]} -gt 0 ] || { echo "No .sh files found — the glob is stale"; exit 1; }
+          status=0
+          for f in "${scripts[@]}"; do
+            test -x "$f" || { echo "Not executable: $f"; status=1; }
+          done
+          exit $status
+
+      - name: Referenced paths resolve
+        run: |
+          # A wrong path inside a skill body is invisible to markdownlint and to `plugin validate`,
+          # and only surfaces when a review run loses its format spec. skills/doc-review/SKILL.md
+          # calls this the check most worth spending time on; apply it to ourselves.
+          status=0
+          while IFS=: read -r file _ ref; do
+            dir=$(dirname "$file")
+            target="${ref/\$\{CLAUDE_SKILL_DIR\}/$dir}"
+            [ -e "$target" ] || { echo "Dangling reference in $file: $ref"; status=1; }
+          done < <(grep -rnoE '\$\{CLAUDE_SKILL_DIR\}[^`]*' skills/)
+          exit $status
+
+      - name: Skills are user-invoked only
+        run: |
+          # disable-model-invocation is what keeps Claude from fanning out three subagents across a
+          # branch on its own. --strict checks that frontmatter is valid, not that this field is
+          # present.
+          status=0
+          for f in skills/*/SKILL.md; do
+            grep -q '^disable-model-invocation: true$' "$f" \
+              || { echo "Missing disable-model-invocation in $f"; status=1; }
+          done
+          exit $status
+
+      - name: Sample review conforms to the finding format
+        # The golden sample is the only worked example of the format, and it had already drifted
+        # from the spec once before anyone noticed.
+        run: scripts/check-finding-format.sh examples/sample-review.md
+
+      - name: Triage hook never blocks
+        run: |
+          # The hook's whole contract is that it observes without blocking: a non-zero exit from a
+          # PostToolUse hook surfaces to the user mid-triage. Every failure path must still exit 0,
+          # including ones that log nothing.
+          fixtures=(
+            '{"tool_input":{"questions":[{"header":"F1","question":"Fix F1?"}]}}'
+            '{"tool_input":{"questions":[{"header":"Ship","question":"Deploy?"}]}}'
+            'not json'
+            ''
+          )
+          status=0
+          for f in "${fixtures[@]}"; do
+            printf '%s' "$f" | HOME="$(mktemp -d)" examples/hooks/log-triage-decisions.sh \
+              || { echo "Hook exited non-zero on: ${f:-<empty>}"; status=1; }
+          done
+          # HOME unset is its own path: it aborts before any guard under `set -u` unless explicitly
+          # handled.
+          printf '%s' "${fixtures[0]}" | env -u HOME examples/hooks/log-triage-decisions.sh \
+            || { echo "Hook exited non-zero with HOME unset"; status=1; }
+          exit $status

@@ -1,46 +1,63 @@
 # review-toolkit
 
-A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) that provides
-structured code review commands and interactive triage using [MCP
-elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation).
+A [Claude Code plugin](https://code.claude.com/docs/en/plugins) for multi-agent code and document
+review, with durable findings and interactive triage.
 
 **Includes:**
 
-- `/local-review` — multi-agent code review with configurable reviewers
+- `/local-review` — multi-agent code review of your branch changes
 - `/doc-review` — document quality review
-- `/triage` — interactive finding triage (`git add --patch` for code reviews)
+- `/triage` — batch through findings and decide each one (`git add --patch` for code reviews)
 - 4 bundled reviewer agents (code quality, security, testing, documentation)
+
+Pure markdown. No build step, no runtime dependencies, no MCP server.
 
 ## Requirements
 
-- **Claude Code v2.1.76+** (for MCP elicitation support)
-- **Node.js 20+**
+Claude Code v2.1.145 or later — the first release that invokes a plugin skill as a slash
+command. CI validates against that floor and against the latest release, so the claim is
+exercised rather than asserted.
 
 ## Install
 
 ```bash
-claude plugin install ExtractableMedia/review-toolkit
+claude plugin marketplace add ExtractableMedia/review-toolkit
+claude plugin install review-toolkit@extractable-media
 ```
 
-### Manual install (development)
+Or from inside a session:
+
+- `/plugin marketplace add ExtractableMedia/review-toolkit`
+- `/plugin install review-toolkit@extractable-media`
+
+### Try it without installing
 
 ```bash
 git clone https://github.com/ExtractableMedia/review-toolkit.git
-cd review-toolkit
-npm install
-npm run build
-
-# Test locally without installing
-claude --plugin-dir /path/to/review-toolkit
+claude --plugin-dir ./review-toolkit
 ```
+
+## What this is for
+
+Claude Code already ships strong general review: `/code-review` finds correctness bugs in your diff,
+`/security-review` checks it for vulnerabilities. Use those.
+
+This plugin covers what they don't:
+
+- **A durable artifact.** Findings land in a Markdown file in your repo, so they survive the
+  session, get committed alongside the branch, and can be posted to the PR. Built-in review renders
+  into the transcript and is gone when the session is.
+- **Your reviewers.** Register project-specific specialists — a Rails expert, a Postgres migration
+  reviewer, a domain expert — and dispatch them conditionally based on which files changed.
+- **Triage as a step.** Findings get an explicit disposition, recorded in the file, before anything
+  gets fixed. `Ignore` with a reason is a first-class outcome, not a finding you scrolled past.
 
 ## Commands
 
 ### `/local-review`
 
-Dispatches multiple reviewer agents in parallel to analyze your branch changes, then collates
-findings into a single `local-review.md` with numbered findings, severity indicators, and a
-pre-merge checklist.
+Dispatches reviewer agents in parallel against your branch changes, then writes numbered findings to
+`local-review.md` in the repository root.
 
 ```text
 /local-review
@@ -48,200 +65,173 @@ pre-merge checklist.
 /local-review app/controllers/
 ```
 
-**Built-in reviewers** (always dispatched):
+The base branch is the first of the remote HEAD's target, `main`, `master`, `develop`, or `trunk`
+that resolves to a ref this clone actually has. The remote-tracking ref wins over the local branch,
+so the base is usually reported as `origin/main` rather than `main` — a local branch left unpulled
+would otherwise drag already-merged upstream commits into the review. The remote is whichever one is
+named `origin`, or the first configured if there is none, so a `--origin upstream` clone works too.
+Uncommitted changes are included.
+
+If the remote names a default branch that this clone has no ref for — routine in single-branch and
+shallow clones — the base is reported as unresolved and `/local-review` stops and asks rather than
+reviewing an empty diff.
+
+**Bundled reviewers** — always dispatched:
 
 | Agent | Focus |
 |-------|-------|
-| `code-best-practices-reviewer` | Code quality, SOLID, DRY, naming, complexity |
-| `security-reviewer` | OWASP Top 10, injection, auth, data exposure |
-| `test-suite-architect` | Test coverage gaps, test quality, strategy |
-| `documentation-expert` | Collates all findings into the review document |
+| `code-best-practices-reviewer` | Separation of concerns, naming, DRY, complexity, error handling |
+| `security-reviewer` | OWASP Top 10, injection, authn/authz, data exposure, dependencies |
+| `test-suite-architect` | Coverage gaps, tests needing updates, brittle assertions |
 
-**Project-specific reviewers** are configured via `.claude/review-config.md` (see
-[Configuration](#project-configuration) below).
+**Project reviewers** come from `.claude/review-config.md` — see
+[Project configuration](#project-configuration).
 
 ### `/doc-review`
 
-Reviews a document for formatting, consistency, accuracy, clarity, sensitive information,
-spelling/grammar, and staleness.
+Reviews a document for formatting, consistency, accuracy, clarity, leaked secrets, spelling, and
+staleness. Writes a `*-DOC-REVIEW.md` file using the same finding format.
 
 ```text
 /doc-review README.md
 /doc-review docs/architecture.md
 ```
 
-Outputs a `*-DOC-REVIEW.md` file with numbered findings using the same format as `/local-review`.
-
 ### `/triage`
 
-Interactively triage findings from a review file, presenting each finding one at a time with an
-action menu via MCP elicitation.
+Walks the unresolved findings in a review file, four at a time, recording a decision for each — then
+fixes the ones you marked `Fix`.
 
 ```text
 /triage
 /triage local-review.md
-/triage my-doc-DOC-REVIEW.md
+/triage --severity critical,high
 ```
 
-**Actions per finding:**
+Each finding gets four options: **Fix**, **Accept**, **Defer**, **Ignore**. The free-text row takes
+anything else — type `fix but use a lookup table` to add a constraint, or `skip` to leave it
+undecided.
 
-- **Fix** — dispatch agent to resolve after triage
-- **Fix with guidance** — add context for the fixing agent
-- **Accept** — mark as acceptable (no fix needed)
-- **Defer** — address later
-- **Ignore** — won't fix
-- **Skip** — decide later
+Decisions are written to the file **after every batch**, so an interrupted triage keeps everything
+you already decided.
 
-The tool updates the review file in place with status markers for accept/defer/ignore decisions.
+## Finding format
 
-## Bundled Agents
+```markdown
+### F1 🟡 Medium Priority - Missing input validation
 
-The plugin ships 4 generic reviewer agents that work across any codebase:
+**File:** `app/controllers/users_controller.rb` (line 45)
+**Issue:** The `update` action accepts arbitrary parameters without validation.
+**Suggestion:** Add strong parameters and validate expected input types.
+```
 
-| Agent | Purpose |
-|-------|---------|
-| `code-best-practices-reviewer` | Code organization, SOLID, DRY, naming, error handling |
-| `security-reviewer` | OWASP Top 10, injection, auth, data exposure, dependencies |
-| `test-suite-architect` | Test creation, coverage analysis, test strategy, refactoring |
-| `documentation-expert` | Review collation, document formatting, merge logic |
+| Severity | Meaning |
+|----------|---------|
+| 🔴 Critical | Must fix |
+| 🟠 High Priority | Should fix before merge |
+| 🟡 Medium Priority | Should address |
+| 🟢 Low Priority | Can address later |
+| ℹ️ Observation | Positive note, no action needed |
 
-Framework-specific agents (Rails, PostgreSQL, etc.) are **not bundled** — add them to your project
-via `.claude/review-config.md`.
+Resolved findings are struck through and marked, never deleted:
 
-## Project Configuration
+```markdown
+### F1 ~~🟡 Medium Priority - Missing input validation~~ ✅ Fixed
+### F2 ~~🟢 Low Priority - Consider extracting method~~ 🚫 Ignored
+### F3 ~~🟠 High Priority - Missing CSRF check~~ ⏸️ Deferred
+```
 
-Create `.claude/review-config.md` in your project to add specialized reviewers beyond the 4 built-in
-ones. The config supports two sections:
+The full specification — numbering, status markers, summary table, checklist, and the rules for
+merging a re-review into an existing file — lives in
+[`reference/finding-format.md`](reference/finding-format.md). All three commands read it, so it is
+the one place to change the format.
 
-### Always Run
+See [`examples/sample-review.md`](examples/sample-review.md) for a complete review file.
 
-Agents dispatched on every review:
+## Project configuration
+
+Create `.claude/review-config.md` in your project to add specialists beyond the bundled three.
 
 ```markdown
 ## Always Run
 
 ### ruby-on-rails-expert
 - Rails conventions, Active Record patterns, controller design
-- Model responsibilities, performance considerations
-```
+- Efficient queries, scopes, avoiding N+1 queries
 
-### Conditional
-
-Agents dispatched only when the change set includes files matching trigger patterns:
-
-```markdown
 ## Conditional
-
-### ui-ux-design-specialist
-**Trigger:** `app/views/**`, `app/assets/stylesheets/**`,
-`app/javascript/**`, `spec/system/**`
-- Visual consistency, accessibility, responsive design
-- User feedback, interaction patterns
 
 ### postgresql-expert
 **Trigger:** `db/migrate/**`, `db/schema.rb`
 - Migration safety, index strategy, data type choices
 ```
 
-Configured agents must be available in the project's `.claude/agents/` directory or the user's
-`~/.claude/agents/`.
+**Always Run** reviewers are dispatched every time. **Conditional** reviewers are dispatched only
+when the change set touches a file matching one of their trigger globs, so a CSS-only branch doesn't
+wake the database reviewer.
 
-See `examples/review-config.md` for a complete example.
+Each named agent must exist in `.claude/agents/` or `~/.claude/agents/`. A missing one is reported
+in the review rather than aborting it.
 
-## Finding Format
+See [`examples/review-config.md`](examples/review-config.md) for a fuller example.
 
-All review commands use the same output format:
+## Reviewer agents
 
-```markdown
-### F1 🟡 Medium Priority - Missing input validation
+Reviewers report; they don't fix. Fixes happen in `/triage`, after you have approved them.
 
-**File:** `app/controllers/users_controller.rb` (line 45)
-**Issue:** Description of the problem
-**Suggestion:** How to fix it
-```
+| Agent | Purpose |
+|-------|---------|
+| `code-best-practices-reviewer` | SOLID, DRY, naming, complexity, error handling |
+| `security-reviewer` | OWASP Top 10, injection, authn/authz, secrets, dependencies |
+| `test-suite-architect` | Coverage analysis, test quality, test strategy |
+| `documentation-expert` | Document review: accuracy, consistency, clarity, staleness |
 
-**Severity indicators:**
+They're generic by design. Framework-specific reviewers belong in your project via
+`review-config.md`.
 
-- 🔴 Critical — must fix
-- 🟠 High Priority — should fix before merge
-- 🟡 Medium Priority — should address
-- 🟢 Low Priority — can address later
-- ℹ️ Observation — positive note, no action needed
+To route a reviewer to a particular model, add `model:` to its frontmatter in your own copy — for
+example `model: haiku` on the test reviewer to cut cost, or `model: opus` on security to raise
+depth. Without it, reviewers inherit the session model.
 
-**Status markers** (applied when findings are resolved):
+## Auditing triage decisions
 
-- `~~heading~~ ✅ Fixed`
-- `~~heading~~ 🚫 Ignored`
-- `~~heading~~ ⏸️ Deferred`
+`/triage` collects decisions with the built-in `AskUserQuestion` tool, so a `PostToolUse` hook can
+log every one. [`examples/hooks/log-triage-decisions.sh`](examples/hooks/log-triage-decisions.sh)
+appends them to `~/.claude/triage-log.jsonl`; the settings entry to wire it up is in
+[`examples/hooks/settings-snippet.json`](examples/hooks/settings-snippet.json).
 
-## Hooks
+To skip low-severity findings, you don't need a hook — pass `/triage --severity critical,high`.
 
-Claude Code's `Elicitation` and `ElicitationResult` hooks can customize triage behavior. See
-`examples/hooks/` for:
-
-### Auto-skip low-priority findings
-
-`examples/hooks/auto-skip-low-priority.sh` — automatically skips 🟢 Low Priority findings so you only
-see Critical/High/Medium in the interactive triage.
-
-### Log triage decisions
-
-`examples/hooks/log-triage-decisions.sh` — appends every triage decision to
-`~/.claude/triage-log.jsonl` for auditing.
-
-### Configuration
-
-Add hooks to your `.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "Elicitation": [
-      {
-        "matcher": "review-toolkit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/path/to/auto-skip-low-priority.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-## How It Works
+## How it works
 
 ```text
-/local-review  →  dispatches reviewer agents in parallel
-                       ↓
-               documentation-expert collates findings
-                       ↓
-               writes local-review.md
-                       ↓
-/triage  →  calls MCP tool "triage_findings"
-                       ↓
-              MCP server reads file, loops:
-                ┌─ elicitation/create (finding + action menu)
-                │     ↓  Elicitation hook (auto-skip?)
-                │  user picks action
-                │     ↓  ElicitationResult hook (log?)
-                │  if "fix with guidance" → 2nd elicitation
-                │  update file markers
-                └─ repeat
-                       ↓
-              returns structured triage results
-                       ↓
-              Claude fixes findings marked "fix"
+/local-review
+    ├── detects base branch, resolves the change set
+    ├── dispatches reviewers in parallel ──┬── code-best-practices-reviewer
+    │                                      ├── security-reviewer
+    │                                      ├── test-suite-architect
+    │                                      └── project reviewers (conditional)
+    └── numbers findings F1..Fn, writes/merges local-review.md
+
+/triage
+    ├── reads the file, drops resolved findings and observations
+    ├── asks up to 4 findings per prompt (Fix / Accept / Defer / Ignore)
+    ├── writes status markers after every batch
+    └── fixes the Fix findings, marking each ✅ as it lands
 ```
 
 ## Development
 
+There is no build. Edit the markdown and reload.
+
 ```bash
-npm install
-npm run build
+claude --plugin-dir .                  # run against your working copy
+claude plugin validate .               # validate the marketplace manifest
 ```
+
+To validate the plugin manifest and component frontmatter, validate a copy without
+`marketplace.json` present — `claude plugin validate` checks whichever manifest it finds first. The
+CI workflow in [`.github/workflows/validate.yml`](.github/workflows/validate.yml) does both.
 
 ## License
 

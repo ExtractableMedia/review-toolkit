@@ -3,9 +3,6 @@
 
 extends: default
 
-ignore: |
-  node_modules/
-
 rules:
   # Trailing comments here use one space, not yamllint's two: `key: value # why`.
   comments:
