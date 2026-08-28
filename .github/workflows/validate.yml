@@ -127,3 +127,13 @@ jobs:
           printf '%s' "${fixtures[0]}" | env -u HOME examples/hooks/log-triage-decisions.sh \
             || { echo "Hook exited non-zero with HOME unset"; status=1; }
           exit $status
+
+      - name: Reviewers use the resolved base, not a hardcoded one
+        run: |
+          # /local-review resolves the base branch once and passes each reviewer an explicit range.
+          # A hardcoded main...HEAD in an agent or skill silently reviews the wrong code on a
+          # master/develop/trunk repository, and reports it clean.
+          if grep -rnE '\b(main|master)\.\.\.?HEAD' agents/ skills/; then
+            echo "Hardcoded base branch above — use the range /local-review passes in."
+            exit 1
+          fi

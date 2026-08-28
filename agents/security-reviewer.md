@@ -14,8 +14,24 @@ provide actionable remediation guidance.
 
 ## Review Process
 
-1. **Identify Changed Files**: Use `git diff main...HEAD --name-only` to list all modified files
-2. **Analyze Code Changes**: Review the actual changes with `git diff main...HEAD`
+1. **Establish the change set**: Review whatever range or file list you were given. If none was
+   specified, resolve the base branch before diffing — never assume a particular default:
+
+   ```bash
+   # Keep the remote-tracking ref. Stripping it to a bare branch name breaks on any
+   # clone that has origin/<name> but no local one, and the empty diff that follows
+   # reads as an unchanged branch rather than as a missing base.
+   base=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD)
+   git diff "$base...HEAD" --name-only
+   ```
+
+   If no remote HEAD is set, fall back to whichever of `origin/master`, `origin/develop`, or
+   `origin/trunk` exists — or the matching local branch. Include uncommitted changes
+   (`git status --short`) too; vulnerabilities don't wait for a commit.
+
+2. **Analyze Code Changes**: Read the actual diff, then read the surrounding file for anything that
+   looks risky. A diff hunk rarely shows whether the authorization check three functions up still
+   applies.
 3. **Systematic Security Evaluation**: Check each category below methodically
 
 ## Security Categories to Review

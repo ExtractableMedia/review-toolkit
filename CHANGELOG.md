@@ -39,6 +39,10 @@ Rewritten as a pure-markdown plugin. No build step, no Node dependency, no MCP s
   and is empty. It now checks for `jq` once and reports real errors.
 - The triage hook exited 1 when `HOME` was unset, interrupting the user mid-triage, and exited
   silently when its log directory could not be created. Both now report on stderr and exit 0.
+- `security-reviewer` recomputed its own diff against a hardcoded base, so on a repository whose
+  default branch is `master`, `develop`, or `trunk` it reviewed nothing and reported clean. It now
+  resolves the base, and `validate.yml` fails if a hardcoded one reappears under `agents/` or
+  `skills/`.
 
 ### Changed
 
