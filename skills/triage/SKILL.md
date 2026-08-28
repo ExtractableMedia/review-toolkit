@@ -26,10 +26,18 @@ it, all actionable findings are in scope.
 
 Read the file and select the findings that still need a decision:
 
+- **Take open findings** — actionable findings marked ❓ Open, or carrying no marker at all in a file
+  written before ❓ existed.
 - **Skip resolved findings** — anything whose heading is struck through (`~~…~~`) and carries a ✅,
   ⏸️, or 🚫 marker.
-- **Skip observations** — ℹ️ findings record something good; there's nothing to decide.
+- **Skip observations** — ℹ️ and 💡 findings record something good or optional; there's nothing to
+  decide.
 - **Apply the severity filter** if one was given.
+
+A finding's **Recommendation** is the reviewer's advice, not a decision already made. A Skip
+recommendation still needs triaging — that's the whole point of this pass. Show the recommendation
+when presenting the finding, since it's useful context, but never treat it as an answer or
+pre-select an option from it.
 
 If nothing is left, report how many findings the file holds and their current dispositions, then
 stop. That is a successful outcome, not a failure.
@@ -78,6 +86,11 @@ The free-text row is automatically available on every question. Anything typed t
 means leave the finding untouched and undecided. Honor what was written rather than forcing it into
 one of the four labels.
 
+Watch the word `skip` — in the free-text row it means "not now," which leaves the finding ❓ Open. It
+is not the `Skip` **recommendation**, and it is not the `Ignore` option. Only an explicit
+instruction to ignore a particular finding writes 🚫. If what the user meant is ambiguous, ask rather
+than infer.
+
 ## Record decisions as you go
 
 **After each batch, write the decisions to the file before presenting the next.** Don't accumulate
@@ -87,11 +100,17 @@ must still be on disk.
 For each Accept, Defer, or Ignore, apply the status marker described in the reference: strike
 through everything after the finding ID, append the icon and label, and add a `**Status:**` line as
 the first line of the body carrying the reason. When the user typed a reason in the free-text row,
-that's the reason — use their words. Leave Fix decisions unmarked for now; they get marked once the
-fix actually lands.
+that's the reason — use their words. Leave Fix decisions at ❓ for now; they move to ✅ once the fix
+actually lands.
+
+This pass is the only thing authorized to write ⏸️ or 🚫, because it's the only place the user rules
+on a finding. Anything the user didn't rule on stays ❓ — a finding they didn't mention, one they
+typed `come back to this` on, or one a severity filter kept out of scope. Never infer a disposition
+from silence.
 
 Update the checklist and the Status column of the summary table in the same pass, so the document
-never disagrees with itself.
+never disagrees with itself: swap the ❓ for the decided glyph and check the box, since accepted,
+deferred, and ignored findings are all off the pre-merge path.
 
 ## Fix what was marked Fix
 
@@ -99,7 +118,8 @@ Work through the Fix findings in finding-number order. For each one:
 
 1. Read the full finding from the file for the complete context.
 2. Make the change, following any guidance the user typed.
-3. Mark it `✅ Fixed` with a `**Status:**` line naming what was done, and check its checklist box.
+3. Mark it `✅ Fixed` with a `**Status:**` line naming what was done, then swap the ❓ for ✅ in its
+   checklist item and check the box.
 
 Fix them in the main session rather than dispatching a subagent per finding — you have the review
 file, the guidance, and the surrounding code in context already, and the findings frequently touch

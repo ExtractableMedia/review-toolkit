@@ -87,6 +87,25 @@ reviewing an empty diff.
 **Project reviewers** come from `.claude/review-config.md` — see
 [Project configuration](#project-configuration).
 
+Two flags change what is reviewed:
+
+```text
+/local-review --plan
+/local-review --reconcile
+```
+
+`--plan` reviews an implementation plan instead of a diff — `PLAN.md` if it exists, otherwise the
+newest plan in `~/.claude/plans/` for this project. The same reviewers run, chosen by the paths the
+plan says it will touch, and each reads the files the plan references so it can catch assumptions
+the code doesn't support.
+
+`--reconcile` re-reads `local-review.md`, checks whether each open finding has since been fixed, and
+marks the ones that have. No reviewer runs and no finding is added, removed, or re-judged.
+
+Every run appends a **Review History** entry recording the date and the model each reviewer actually
+resolved to, so a review's weight can be judged later. Model aliases like `opus` drift as new models
+ship and can resolve downward under load, which makes the alias useless as a record.
+
 ### `/doc-review`
 
 Reviews a document for formatting, consistency, accuracy, clarity, leaked secrets, spelling, and
@@ -123,6 +142,7 @@ you already decided.
 **File:** `app/controllers/users_controller.rb` (line 45)
 **Issue:** The `update` action accepts arbitrary parameters without validation.
 **Suggestion:** Add strong parameters and validate expected input types.
+**Recommendation:** Implement — unvalidated input reaches a database write.
 ```
 
 | Severity | Meaning |
@@ -140,6 +160,13 @@ Resolved findings are struck through and marked, never deleted:
 ### F2 ~~🟢 Low Priority - Consider extracting method~~ 🚫 Ignored
 ### F3 ~~🟠 High Priority - Missing CSRF check~~ ⏸️ Deferred
 ```
+
+Every actionable finding starts at **❓ Open** and stays there until someone rules on it.
+**Recommendation** is what the reviewer advised — Implement, Defer, or Skip; **Status** is what was
+decided. A review never sets the second from the first: a Skip recommendation nobody has accepted
+reads `Skip | ❓`, not `Skip | 🚫`. Only `/triage` writes ⏸️ and 🚫, because only you can decide them.
+`✅ Fixed` is the exception — it states a fact about the code, so `--reconcile` can apply it without
+asking.
 
 The full specification — numbering, status markers, summary table, checklist, and the rules for
 merging a re-review into an existing file — lives in
@@ -170,8 +197,39 @@ Create `.claude/review-config.md` in your project to add specialists beyond the 
 when the change set touches a file matching one of their trigger globs, so a CSS-only branch doesn't
 wake the database reviewer.
 
-Each named agent must exist in `.claude/agents/` or `~/.claude/agents/`. A missing one is reported
-in the review rather than aborting it.
+Each named agent must exist in `~/.claude/agents/`, and is dispatched from there. The config routes
+— it names which reviewer runs — but it never supplies that reviewer's instructions, because the
+config ships inside the repository being reviewed and the change set can modify it. An agent that
+exists only in the repository's own `.claude/agents/` is named in the review for you to approve
+rather than dispatched, and a missing one is reported rather than aborting the run.
+
+Two further sections, both optional, are passed verbatim to every reviewer — the bundled three
+included:
+
+````markdown
+## Review Context
+
+- We're migrating off Sidekiq onto Solid Queue. Flag new `perform_async` calls
+  as 🟡 Medium — they aren't broken, but they're new debt.
+
+## Verifying Changes
+
+Reviewers run in parallel against one checkout, so namespace the test database:
+
+```bash
+SUFFIX=${PWD##*/}; SUFFIX=${SUFFIX//[^[:alnum:]]/_}
+export TEST_DATABASE="myapp_test_${SUFFIX}"
+bin/rails db:test:prepare
+```
+````
+
+**Review Context** is prose a reviewer can't infer from the code — a migration in flight, an idiom
+that would otherwise read as a mistake. **Verifying Changes** is how to run things here, for a
+reviewer that wants to check a claim rather than reason about it. Both exist because subagents start
+with an empty context and never see your config file.
+
+Keep reviewer entries thin. Deep domain knowledge belongs in the agent's own definition in
+`.claude/agents/`, where every session can use it; this file adds routing — which agent, and when.
 
 See [`examples/review-config.md`](examples/review-config.md) for a fuller example.
 
