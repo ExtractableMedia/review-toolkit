@@ -52,6 +52,15 @@ There is no test suite. What can break is a manifest, a lint rule, or a prose in
   This file is removed alongside the marketplace manifest because `--strict` warns that a root
   `CLAUDE.md` is never loaded for people who install the plugin — true of the plugin, and not a
   defect in a file written for contributors here. `.github/workflows/validate.yml` does the same.
+- **Reproduce how CI invokes a change, not just the change.** A check that exercises the artifact
+  and not the invocation passes locally and fails in CI. Two traps specific to this workflow's
+  inline steps: Actions runs a `run:` block as `bash -e`, so a step asserting a non-zero exit needs
+  `|| got=$?` rather than a bare call; and super-linter shellchecks every `run:` block through
+  actionlint, so a deliberate offense in a fixture string needs a `# shellcheck disable=` and its
+  reason. Extract a step from the YAML to test it rather than retyping it.
+- **A step that asserts behavior needs a negative check.** Break what it tests — stub the hook to
+  `exit 0`, delete a guard — and confirm the step fails. An assertion that cannot go red is
+  decoration, and an inert hook is exactly what these steps exist to catch.
 - `scripts/check-finding-format.sh examples/sample-review.md` — the sample is the only worked
   example of the format, and it has drifted from the spec before.
 - CI validates against the oldest supported Claude Code release and the latest, so a claim in the
