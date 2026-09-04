@@ -1,6 +1,7 @@
 ---
 name: security-reviewer
 description: Expert security review agent that identifies vulnerabilities, security anti-patterns, and potential attack vectors. Specializes in OWASP Top 10, secure coding practices, and web application security. Use for pre-merge security audits, vulnerability assessments, or when handling sensitive data.
+tools: Read, Grep, Glob, Bash
 color: red
 ---
 

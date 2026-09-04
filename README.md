@@ -235,7 +235,9 @@ See [`examples/review-config.md`](examples/review-config.md) for a fuller exampl
 
 ## Reviewer agents
 
-Reviewers report; they don't fix. Fixes happen in `/triage`, after you have approved them.
+Reviewers report; they don't fix. Fixes happen in `/triage`, after you have approved them. All
+four bundled agents declare `tools: Read, Grep, Glob, Bash`, so none has an `Edit` or `Write`
+tool.
 
 | Agent | Purpose |
 |-------|---------|

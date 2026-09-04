@@ -72,6 +72,8 @@ Rewritten as a pure-markdown plugin. No build step, no Node dependency, no MCP s
   default branch is `master`, `develop`, or `trunk` it reviewed nothing and reported clean. It now
   resolves the base, and `validate.yml` fails if a hardcoded one reappears under `agents/` or
   `skills/`.
+- Reviewer agents could edit the code they were reviewing. All four now declare
+  `tools: Read, Grep, Glob, Bash`, so none has an `Edit` or `Write` tool.
 
 ### Changed
 
@@ -114,6 +116,8 @@ Rewritten as a pure-markdown plugin. No build step, no Node dependency, no MCP s
   permissions — no prompt injection required, since obeying the config is the intended path. The
   config now routes only: an agent found solely in the repository is named for approval rather than
   run, and a change set that touches the config skips project reviewers entirely.
+- Reviewer prose follows the new permissions: `test-suite-architect` specifies tests rather than
+  writing them, and `documentation-expert` returns findings rather than assembling the review file.
 
 ### Known issue
 
