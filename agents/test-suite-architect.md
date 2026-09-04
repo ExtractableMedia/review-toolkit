@@ -1,6 +1,7 @@
 ---
 name: test-suite-architect
 description: Expert testing agent for creating, reviewing, and improving test suites. Specializes in test-driven development, comprehensive test coverage, test strategy design, and debugging failing tests across multiple languages and frameworks.
+color: green
 ---
 
 # Test Suite Architect

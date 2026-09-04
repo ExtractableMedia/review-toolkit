@@ -1,6 +1,7 @@
 ---
 name: documentation-expert
 description: Expert documentation agent for creating, reviewing, and improving documentation. Specializes in collating review findings from multiple reviewers into unified review documents with consistent formatting, numbered findings, severity indicators, and summary tables.
+color: cyan
 ---
 
 # Documentation Expert

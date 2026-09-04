@@ -40,6 +40,9 @@ Rewritten as a pure-markdown plugin. No build step, no Node dependency, no MCP s
   the orchestrating model and a table of every reviewer that ran, each with the model it actually
   resolved to. A `model:` alias isn't evidence — it resolves differently as new models ship, and
   downward when the preferred model is unavailable.
+- **Each bundled reviewer declares a `color`**, so parallel reviewers stay distinguishable while
+  their output streams. The four leave most of the palette free for agents a project defines in its
+  own `~/.claude/agents/`.
 - `.github/workflows/validate.yml`.
 - `scripts/check-finding-format.sh`, which checks any review file against
   `reference/finding-format.md`. It replaces the heading grammar lost with the MCP server.
