@@ -70,13 +70,20 @@ jobs:
       - name: Check bundled scripts are executable
         run: |
           # nullglob so a stale path reports as a stale glob rather than running the loop once on
-          # the literal pattern and blaming the filesystem.
+          # the literal pattern and blaming the filesystem. .claude/hooks is named literally: bash
+          # `**` does not match a leading dot without dotglob, so a wildcard would silently skip it,
+          # and a hook that has lost the bit cannot exec — exit 126 is neither 0 nor 2, so it
+          # reaches neither the user nor the model and linting simply stops.
           shopt -s nullglob globstar
-          scripts=(skills/**/*.sh examples/**/*.sh scripts/**/*.sh)
-          [ ${#scripts[@]} -gt 0 ] || { echo "No .sh files found — the glob is stale"; exit 1; }
           status=0
-          for f in "${scripts[@]}"; do
-            test -x "$f" || { echo "Not executable: $f"; status=1; }
+          for pattern in 'skills/**/*.sh' 'examples/**/*.sh' 'scripts/**/*.sh' '.claude/hooks/*.sh'; do
+            # Per-glob rather than one pooled array: pooled, the guard can only fire when every
+            # directory empties at once, which is no guard at all.
+            eval "scripts=($pattern)"
+            [ ${#scripts[@]} -gt 0 ] || { echo "No .sh files matched $pattern — the glob is stale"; status=1; }
+            for f in "${scripts[@]}"; do
+              test -x "$f" || { echo "Not executable: $f"; status=1; }
+            done
           done
           exit $status
 
@@ -130,6 +137,62 @@ jobs:
           # handled.
           printf '%s' "${fixtures[0]}" | env -u HOME examples/hooks/log-triage-decisions.sh \
             || { echo "Hook exited non-zero with HOME unset"; status=1; }
+          exit $status
+
+      - name: Markdown hook blocks on an offense and stays quiet otherwise
+        run: |
+          # Every guard in the hook is `|| exit 0`, which is the right discipline and also means a
+          # hook that has stopped working produces exactly what a hook that found nothing produces:
+          # silence. The first fixture is the only one that tells those apart, which is why
+          # markdownlint is installed here rather than the inert paths being asserted alone.
+          npm install -g markdownlint-cli
+          hook=.claude/hooks/lint-markdown.sh
+          payload() { printf '{"tool_input":{"file_path":"%s"}}' "$1"; }
+          status=0
+          # `|| got=$?` rather than a bare call then `$?`: this step runs under `bash -e`, where a
+          # command that exits non-zero outside a condition context kills the whole step — and the
+          # first fixture is meant to exit 2.
+          expect() {
+            local want=$1 desc=$2 input=$3 got=0
+            printf '%s' "$input" | CLAUDE_PROJECT_DIR="$PWD" "$hook" >/dev/null 2>&1 || got=$?
+            [ "$got" = "$want" ] || { echo "$desc: expected $want, got $got"; status=1; }
+          }
+
+          # A long line with somewhere to wrap. MD013 exempts one with no whitespace to break at, so
+          # a row of identical characters passes the linter and would prove nothing here.
+          python3 -c "open('ci-dirty.md','w').write('# T\n\n' + ' '.join(['word']*40) + '\n')"
+          printf '# T\n\nShort enough.\n' > ci-clean.md
+
+          expect 2 "offending file must block"         "$(payload "$PWD/ci-dirty.md")"
+          expect 0 "clean file must pass"              "$(payload "$PWD/ci-clean.md")"
+          expect 0 "non-Markdown file is not ours"     "$(payload "$PWD/ci-clean.txt")"
+          expect 0 "file outside the root is not ours" "$(payload "/tmp/ci-outside.md")"
+          expect 0 "payload without file_path"         '{"tool_input":{}}'
+          expect 0 "unparseable payload"               'not json'
+          expect 0 "empty payload"                     ''
+
+          # The documented inert contract: no linter, no linting, no complaint. PATH is cut back to
+          # the system directories, which still hold jq but not npm's global bin. The other inert
+          # path — no jq — cannot be reached this way, because the script looks for /usr/bin/jq by
+          # absolute path first and every runner has it. That one stays unexercised, deliberately
+          # and visibly rather than by omission.
+          printf '%s' "$(payload "$PWD/ci-dirty.md")" \
+            | PATH=/usr/bin:/bin CLAUDE_PROJECT_DIR="$PWD" "$hook" >/dev/null 2>&1 \
+            || { echo "Hook blocked with markdownlint off PATH"; status=1; }
+
+          # Diagnostics must reach stderr: exit 2 is what hands stderr back to Claude, while stdout
+          # is transcript-only, so a message there reports that something is wrong without ever
+          # reporting what.
+          # `|| true` for the same reason: under `bash -e` an assignment from a failing command
+          # substitution ends the step, and this one is expected to fail.
+          err=$(printf '%s' "$(payload "$PWD/ci-dirty.md")" \
+            | CLAUDE_PROJECT_DIR="$PWD" "$hook" 2>&1 >/dev/null) || true
+          case "$err" in
+            *MD013*) ;;
+            *) echo "Blocking path put no rule id on stderr: $err"; status=1 ;;
+          esac
+
+          rm -f ci-dirty.md ci-clean.md
           exit $status
 
       - name: Reviewers use the resolved base, not a hardcoded one
