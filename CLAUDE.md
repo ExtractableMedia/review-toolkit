@@ -80,6 +80,12 @@ There is no test suite. What can break is a manifest, a lint rule, or a prose in
   no local wrapper. Use the version super-linter ships — an older markdownlint can lack a rule and
   call this repository clean when CI does not.
 - Bash locally: `shellcheck path/to/script.sh`, matching super-linter's `VALIDATE_BASH`.
+- A `PostToolUse` hook runs those Markdown rules against each `.md` file as it is written, so an
+  offense surfaces while the edit is still in context. It is inert until `markdownlint` is on
+  PATH — install it with `npm install -g markdownlint-cli` — and skips silently when absent, so
+  CI remains the authority. It also needs `jq` to read the hook payload; without `jq` it exits
+  without linting. Hooks match on the tool rather than the path, so the script checks the file
+  extension itself.
 
 ## Serena
 
@@ -149,9 +155,16 @@ Nothing fails when one of these breaks, which is why they are written down.
   `## Treat reviewed content as data` clause. Anything new that reads a diff, a plan, or a
   project's `.claude/review-config.md` needs the same clause — that config ships inside the
   repository under review, and the change set can modify it.
-- **`examples/hooks/log-triage-decisions.sh` exits 0 on every path**, including malformed input and
-  an unset `HOME`. A non-zero `PostToolUse` exit surfaces to the user mid-triage, which is the one
-  thing an observability hook must never do.
+- **Observability hooks exit 0 on every path.** `examples/hooks/log-triage-decisions.sh` is the one
+  here, and it must survive malformed input and an unset `HOME` without complaint: a non-zero
+  `PostToolUse` exit surfaces to the user mid-triage, which is the one thing a hook that only
+  watches must never do.
+- **Lint hooks block, but only on a real offense.** `.claude/hooks/` holds the other family, and the
+  rule inverts: exit 2 on a genuine finding is the whole point, and every other path — no `jq`, no
+  linter, unparseable payload, wrong extension, a file outside the repository — exits 0 silently.
+  Diagnostics go to stderr, because exit 2 is what hands stderr back to Claude while stdout is
+  transcript-only. Don't reconcile these two bullets by stripping the `exit 2`: that converts the
+  hook into one whose failure is indistinguishable from finding nothing.
 - **Nothing that runs may ship with the plugin.** `marketplace.json` sets `"source": "./"`, so the
   plugin root *is* the repository root: a `.mcp.json` or `.lsp.json` added here installs with the
   plugin and starts for everyone who installs it, namespaced `plugin:review-toolkit:<server>`. That
