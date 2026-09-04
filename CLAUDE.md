@@ -86,6 +86,9 @@ There is no test suite. What can break is a manifest, a lint rule, or a prose in
   CI remains the authority. It also needs `jq` to read the hook payload; without `jq` it exits
   without linting. Hooks match on the tool rather than the path, so the script checks the file
   extension itself.
+- A second hook shellchecks each `.sh` file as it is written, on the same terms, and restores the
+  executable bit — the one `Write` never sets and CI requires — in every directory CI checks for
+  it, `.claude/hooks/` included. It skips symlinks, since `chmod` follows them.
 
 ## Serena
 
@@ -138,9 +141,11 @@ the first group fails the build, the second fails only if a reviewer notices.
 - **`${CLAUDE_SKILL_DIR}` references must resolve.** A wrong path inside a skill body is invisible
   to markdownlint and to `plugin validate`, and surfaces only when a review run loses its format
   spec.
-- **Every `.sh` under `skills/`, `examples/` and `scripts/` is executable.** The `Write` tool
-  creates files without the bit, so a script authored through it fails the check until the bit
-  is restored.
+- **Every `.sh` under `skills/`, `examples/`, `scripts/` and `.claude/hooks/` is executable.** The
+  `Write` tool creates files without the bit; the shell hook restores it across all four, and CI
+  names `.claude/hooks/` literally because bash `**` skips a leading dot. Both are needed: the hook
+  fixes a script as it is written, and CI catches the one case the hook cannot — a hook that has
+  lost its own bit, which fails with 126, neither 0 nor 2, so it reaches nobody.
 
 ### Enforced by review, not by CI
 

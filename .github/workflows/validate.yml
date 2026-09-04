@@ -195,6 +195,76 @@ jobs:
           rm -f ci-dirty.md ci-clean.md
           exit $status
 
+      - name: Shell hook blocks, restores the bit, and touches nothing else
+        run: |
+          # Same reasoning as the Markdown hook's step: every guard exits 0, so an inert hook and a
+          # clean tree look identical. This one also mutates the filesystem, which is the only side
+          # effect in either hook and so the one most worth pinning. shellcheck is preinstalled on
+          # the runner. Fixtures live in a scratch tree rather than the repository, so a bug in the
+          # hook cannot chmod the real skills/ directory while proving it does.
+          hook="$PWD/.claude/hooks/lint-shell.sh"
+          work="$RUNNER_TEMP/shell-hook"
+          rm -rf "$work"; mkdir -p "$work/skills" "$work/.claude/hooks"
+          printf '#!/bin/bash\necho ok\n' > "$work/skills/clean.sh"
+          # shellcheck disable=SC2016  # the literal $x is the point: it is what makes shellcheck
+          # flag the fixture with SC2154, which the stderr assertion at the end looks for.
+          printf '#!/bin/bash\nif [ $x = 1 ]; then echo hi; fi\n' > "$work/skills/dirty.sh"
+          printf '#!/bin/bash\necho ok\n' > "$work/.claude/hooks/nested.sh"
+          printf '#!/bin/bash\necho ok\n' > "$work/target.sh"
+          ln -s "$work/target.sh" "$work/skills/linked.sh"
+          chmod 644 "$work/skills/clean.sh" "$work/skills/dirty.sh" "$work/.claude/hooks/nested.sh"
+          chmod 600 "$work/target.sh"
+
+          payload() { printf '{"tool_input":{"file_path":"%s"}}' "$1"; }
+          status=0
+          # `|| got=$?` because this step runs under `bash -e`, where a non-zero exit outside a
+          # condition context ends the step — and the first fixture is meant to exit 2.
+          expect() {
+            local want=$1 desc=$2 input=$3 got=0
+            printf '%s' "$input" | CLAUDE_PROJECT_DIR="$work" "$hook" >/dev/null 2>&1 || got=$?
+            [ "$got" = "$want" ] || { echo "$desc: expected $want, got $got"; status=1; }
+          }
+          mode() { stat -c '%a' "$1"; }
+          expect_mode() {
+            local want=$1 f=$2 got
+            got=$(mode "$f")
+            [ "$got" = "$want" ] || { echo "$f: expected mode $want, got $got"; status=1; }
+          }
+
+          expect 2 "offending script must block"       "$(payload "$work/skills/dirty.sh")"
+          expect 0 "clean script must pass"            "$(payload "$work/skills/clean.sh")"
+          expect 0 "non-shell file is not ours"        "$(payload "$work/skills/notes.md")"
+          expect 0 "file outside the root is not ours" "$(payload "/tmp/outside.sh")"
+          expect 0 "payload without file_path"         '{"tool_input":{}}'
+          expect 0 "unparseable payload"               'not json'
+          expect 0 "empty payload"                     ''
+
+          # The hook's one side effect, asserted in all three directions.
+          expect_mode 755 "$work/skills/clean.sh"
+          expect 0 "hook directory is restored too" "$(payload "$work/.claude/hooks/nested.sh")"
+          expect_mode 755 "$work/.claude/hooks/nested.sh"
+          expect 0 "symlinked script must not be chmod-ed" "$(payload "$work/skills/linked.sh")"
+          expect_mode 600 "$work/target.sh"
+
+          # The documented inert contract: no shellcheck, no linting, no complaint — and the bit is
+          # still restored, because that half has no external dependency beyond jq.
+          chmod 644 "$work/skills/clean.sh"
+          printf '%s' "$(payload "$work/skills/clean.sh")" \
+            | PATH=/usr/bin:/bin CLAUDE_PROJECT_DIR="$work" "$hook" >/dev/null 2>&1 \
+            || { echo "Hook blocked with shellcheck off PATH"; status=1; }
+          expect_mode 755 "$work/skills/clean.sh"
+
+          # Diagnostics must reach stderr, which is what exit 2 hands back to Claude.
+          err=$(printf '%s' "$(payload "$work/skills/dirty.sh")" \
+            | CLAUDE_PROJECT_DIR="$work" "$hook" 2>&1 >/dev/null) || true
+          case "$err" in
+            *SC2154*) ;;
+            *) echo "Blocking path put no shellcheck code on stderr: $err"; status=1 ;;
+          esac
+
+          rm -rf "$work"
+          exit $status
+
       - name: Reviewers use the resolved base, not a hardcoded one
         run: |
           # /local-review resolves the base branch once and passes each reviewer an explicit range.
