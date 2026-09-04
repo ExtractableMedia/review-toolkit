@@ -60,7 +60,11 @@ jobs:
           # so an omission is invisible.
           dest="$RUNNER_TEMP/plugin-check"
           rsync -a --exclude .git/ ./ "$dest/"
-          rm "$dest/.claude-plugin/marketplace.json"
+          # CLAUDE.md goes with it: --strict warns that a root CLAUDE.md is never loaded for the
+          # people who install the plugin. That is true, and not a defect in a file written for
+          # contributors to this repository — but leaving it in place fails the step, and dropping
+          # --strict to get past it would accept every future warning too.
+          rm "$dest/.claude-plugin/marketplace.json" "$dest/CLAUDE.md"
           claude plugin validate "$dest" --strict
 
       - name: Check bundled scripts are executable
