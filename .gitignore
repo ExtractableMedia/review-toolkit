@@ -1,8 +1,13 @@
-# Personal Claude Code settings. The shared ones belong in .claude/settings.json, which is checked
-# in; this file holds per-user overrides and "don't ask again" permission approvals.
-**/.claude/settings.local.json
+# See https://help.github.com/articles/ignoring-files for more about ignoring files
 
-# Not a Node project anymore, but the CI workflow installs a Node CLI and
-# debugging that locally leaves these behind where `git add -A` would stage them.
-node_modules/
-*.tgz
+# Ignore Claude Code's local state. This repository is public and agent memory holds working context
+/.claude/agent-memory/
+/.claude/settings.local.json
+/.claude/worktrees/
+/.claude/*.lock
+
+# Ignore the cache a language server or coding assistant writes into the project
+/.serena/
+
+# Ignore the Node modules a local run of the workflow's CLI install leaves behind
+/node_modules/
