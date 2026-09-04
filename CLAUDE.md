@@ -81,6 +81,27 @@ There is no test suite. What can break is a manifest, a lint rule, or a prose in
   call this repository clean when CI does not.
 - Bash locally: `shellcheck path/to/script.sh`, matching super-linter's `VALIDATE_BASH`.
 
+## Serena
+
+[Serena](https://github.com/oraios/serena) adds symbol-level navigation over this tree. Nothing here
+requires it. It is configured per checkout rather than committed, because a tracked declaration
+would ship with the plugin — see **Plugin Invariants** below:
+
+```bash
+claude mcp add --scope local serena -- \
+  uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context ide-assistant
+```
+
+- `--scope local` is the default, and writes to your own configuration rather than to a file in this
+  repository. That is the whole point: it keeps the invariant true.
+- It runs through `uvx`, which fetches the server from its git repository on first use. Approving
+  the server approves that fetch.
+- To activate the project automatically, put a `SessionStart` hook in `.claude/settings.local.json`,
+  which `.gitignore` excludes for exactly this purpose. Keep it out of the tracked
+  `.claude/settings.json`: a contributor without the server would be told every session to call a
+  tool they do not have.
+- Serena's own cache lands in `/.serena/`, which is ignored and regenerated whenever it is missing.
+
 ## Committing Changes
 
 - Always use the `/commit` slash command when writing or editing a commit message — this includes
@@ -131,6 +152,12 @@ Nothing fails when one of these breaks, which is why they are written down.
 - **`examples/hooks/log-triage-decisions.sh` exits 0 on every path**, including malformed input and
   an unset `HOME`. A non-zero `PostToolUse` exit surfaces to the user mid-triage, which is the one
   thing an observability hook must never do.
+- **Nothing that runs may ship with the plugin.** `marketplace.json` sets `"source": "./"`, so the
+  plugin root *is* the repository root: a `.mcp.json` or `.lsp.json` added here installs with the
+  plugin and starts for everyone who installs it, namespaced `plugin:review-toolkit:<server>`. That
+  contradicts `README.md`, which promises three commands, four agents and no runtime dependencies.
+  Contributor tooling that needs a server is configured per checkout instead (see **Serena**).
+  `claude plugin validate --strict` passes either way, so only a reader catches this.
 
 ## Review Scaffolding
 
