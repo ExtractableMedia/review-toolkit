@@ -90,14 +90,18 @@ jobs:
       - name: Referenced paths resolve
         run: |
           # A wrong path inside a skill body is invisible to markdownlint and to `plugin validate`,
-          # and only surfaces when a review run loses its format spec. skills/doc-review/SKILL.md
+          # and only surfaces when a review run loses its format spec. The document reviewer's brief
           # calls this the check most worth spending time on; apply it to ourselves.
+          #
+          # A reference ends at whitespace or a quote as well as at a backtick: an injected script
+          # can take an argument, as in `${CLAUDE_SKILL_DIR}/scripts/x.sh "$ARGUMENTS"`, and the
+          # argument is not part of the path. Read to the backtick, that script reports as missing.
           status=0
           while IFS=: read -r file _ ref; do
             dir=$(dirname "$file")
             target="${ref/\$\{CLAUDE_SKILL_DIR\}/$dir}"
             [ -e "$target" ] || { echo "Dangling reference in $file: $ref"; status=1; }
-          done < <(grep -rnoE '\$\{CLAUDE_SKILL_DIR\}[^`]*' skills/)
+          done < <(grep -rnoE '\$\{CLAUDE_SKILL_DIR\}[^`"[:space:]]*' skills/)
           exit $status
 
       - name: Skills are user-invoked only

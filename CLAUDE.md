@@ -19,7 +19,10 @@ GitHub keeps it in the description's edit history.
 A Claude Code plugin, shipped as markdown. There is no build step, no runtime dependency and no MCP
 server — `claude --plugin-dir .` runs the working copy as it stands.
 
-- `skills/*/SKILL.md` — the commands: `/local-review`, `/doc-review`, `/triage`
+- `skills/*/SKILL.md` — the commands: `/local-review`, `/doc-review`, `/triage`. A skill's other
+  files are read on demand, not loaded with it: `skills/*/scripts/` hold the context each skill
+  injects before it runs, and `skills/doc-review/reviewer-instructions.md` is the brief
+  `/doc-review` hands its reviewer by path, so the rubric is read at source rather than relayed
 - `agents/*.md` — the bundled reviewer agents
 - `reference/finding-format.md` — the finding format, read by all three skills
 - `examples/` — the golden sample review, a project config example, the triage-logging hook
