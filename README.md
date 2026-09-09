@@ -152,6 +152,7 @@ you already decided.
 | 🟡 Medium Priority | Should address |
 | 🟢 Low Priority | Can address later |
 | ℹ️ Observation | Positive note, no action needed |
+| 💡 Optional | Improvement below the Low bar, action stated inline; no decision needed |
 
 Resolved findings are struck through and marked, never deleted:
 

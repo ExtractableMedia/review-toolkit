@@ -43,6 +43,13 @@ Rewritten as a pure-markdown plugin. No build step, no Node dependency, no MCP s
 - **Each bundled reviewer declares a `color`**, so parallel reviewers stay distinguishable while
   their output streams. The four leave most of the palette free for agents a project defines in its
   own `~/.claude/agents/`.
+- **A 💡 `Optional` observation**, for an improvement below the 🟢 Low bar with its action stated
+  inline. The format had used the icon in three places without defining it, so the checker rejected
+  a heading that the prose required.
+- **Posting to a pull request scrubs local paths first**, and reserves "all clear" for a review in
+  which every actionable finding is fixed or accepted. A finding that traces where an agent resolves
+  from cites a path under the home directory, and editing the comment afterwards leaves the original
+  in its edit history.
 - `.github/workflows/validate.yml`.
 - `scripts/check-finding-format.sh`, which checks any review file against
   `reference/finding-format.md`. It replaces the heading grammar lost with the MCP server.
@@ -94,6 +101,9 @@ Rewritten as a pure-markdown plugin. No build step, no Node dependency, no MCP s
 - `/local-review` no longer ends by asking which findings to fix; that is `/triage`.
 - `/local-review` runs a bundled `scripts/change-set.sh` at skill load, so the branch, base, and
   diffstat are in context before Claude reads the instructions.
+- **Re-reviews re-locate every open finding before judging it**, and strike a finding as fixed only
+  when the condition it describes is verifiably gone. A rewrite that merely moved the text used to
+  read as a fix.
 - **Status is no longer derived from a reviewer's recommendation.** Mapping Defer to ⏸️ and Skip to
   🚫 let a review close its own findings before anyone read them, collapsing the difference between
   advice and consent. ⏸️ and 🚫 are now written only after the user confirms that specific finding —
