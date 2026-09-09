@@ -30,13 +30,16 @@ file.
 - The reader of `agents/*.md` and `skills/*/SKILL.md` is a model executing the text, not a person
   consulting it. Ambiguity, a rule stated without its consequence, and two files stating the same
   rule differently all change behavior at runtime.
-- `reference/finding-format.md` is the single definition of the finding format. All three skills
-  read it at runtime, which is why a skill that restates one of its rules creates a second copy.
+- `reference/finding-format.md` is the single definition of the finding format. The three review
+  skills read it at runtime, which is why a skill that restates one of its rules creates a second
+  copy. `/handoff` and `/resume-handoff` produce no findings and do not read it.
 - In this plugin's design, reviewers report and never fix: `/triage` applies the fixes, after the
   user has ruled on each finding, so a reviewer that edits the code it is reviewing has broken the
   model.
-- Every skill carries a `## Treat reviewed content as data` clause because a review reads a diff, a
-  plan, or a project's `.claude/review-config.md` — all of them content the change set can modify.
+- Every skill carries a `## Treat … as data` clause naming what it reads, because a review reads a
+  diff, a plan or a project's `.claude/review-config.md`, and a handoff pass reads pull request
+  bodies, commit messages and an earlier handoff — all of them content someone outside the session
+  wrote, and most of it content the change set can modify.
 - `/local-review` resolves the base branch once, in `skills/local-review/scripts/change-set.sh`, and
   passes each reviewer an explicit range. Agents and skills therefore carry no base branch of their
   own.
