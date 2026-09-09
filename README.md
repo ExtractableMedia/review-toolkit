@@ -1,13 +1,15 @@
 # review-toolkit
 
 A [Claude Code plugin](https://code.claude.com/docs/en/plugins) for multi-agent code and document
-review, with durable findings and interactive triage.
+review, with durable findings, interactive triage, and verifiable session handoffs.
 
 **Includes:**
 
 - `/local-review` — multi-agent code review of your branch changes
 - `/doc-review` — document quality review
 - `/triage` — batch through findings and decide each one (`git add --patch` for code reviews)
+- `/handoff` — write everything the next session needs to a `*-HANDOFF.md` file
+- `/resume-handoff` — reconcile a handoff against the repository before acting on it
 - 4 bundled reviewer agents (code quality, security, testing, documentation)
 
 Pure markdown. No build step, no runtime dependencies, no MCP server.
@@ -51,6 +53,10 @@ This plugin covers what they don't:
   reviewer, a domain expert — and dispatch them conditionally based on which files changed.
 - **Triage as a step.** Findings get an explicit disposition, recorded in the file, before anything
   gets fixed. `Ignore` with a reason is a first-class outcome, not a finding you scrolled past.
+- **Handoffs that get checked.** `/handoff` writes the session's state to a file tied to the
+  commands that produced it; `/resume-handoff` re-runs those commands before the next session acts
+  on any of it. Compaction summarizes what a session said — this records what it verified, and then
+  verifies that the record is still true.
 
 ## Commands
 
@@ -134,6 +140,47 @@ undecided.
 Decisions are written to the file **after every batch**, so an interrupted triage keeps everything
 you already decided.
 
+### `/handoff`
+
+Writes everything a fresh session needs to resume this one to a `<topic>-HANDOFF.md` file in the
+repository root: objective, scope, what is done and whether it was *verified* or merely *written*,
+decisions and why the alternatives lost, dead ends, open questions, and an ordered next-step
+checklist.
+
+```text
+/handoff
+/handoff payment retry backoff
+/handoff docs/payment-HANDOFF.md
+```
+
+Two things separate it from a summary. Every claim about the branch, the pull request or CI names
+the command whose output it summarizes, so the next agent can re-run it rather than trust it. And a
+second run **merges** into the existing file — history accumulates, dead ends are never deleted, and
+each pass records the model that wrote it, since a pass runs on whatever model was current at the
+time.
+
+The file is left untracked. It is a working artifact, not part of the change.
+
+### `/resume-handoff`
+
+Reconciles a handoff against reality before any of its Next Steps are acted on, then rewrites it in
+place with the drift marked.
+
+```text
+/resume-handoff
+/resume-handoff payment-retry-backoff-HANDOFF.md
+```
+
+A handoff describes a working tree that keeps moving after capture: the branch gets rebased, a
+merged pull request finishes half the checklist, the `local-review.md` it points at gets deleted.
+This extracts every factual claim the file makes, runs the command that checks it, and marks each
+**CONFIRMED**, **DRIFTED** or **UNVERIFIABLE** — a claim it cannot check is never confirmed. It also
+runs the checks the handoff could not have anticipated: what the base branch absorbed since capture,
+whether a peer session is already working on this branch, and whether the artifacts it leans on
+still exist.
+
+It writes nothing but the handoff. Starting the work stays your call.
+
 ## Finding format
 
 ```markdown
@@ -170,8 +217,8 @@ asking.
 
 The full specification — numbering, status markers, summary table, checklist, and the rules for
 merging a re-review into an existing file — lives in
-[`reference/finding-format.md`](reference/finding-format.md). All three commands read it, so it is
-the one place to change the format.
+[`reference/finding-format.md`](reference/finding-format.md). All three review commands read it, so
+it is the one place to change the format.
 
 See [`examples/sample-review.md`](examples/sample-review.md) for a complete review file.
 
@@ -276,6 +323,17 @@ To skip low-severity findings, you don't need a hook — pass `/triage --severit
     ├── asks up to 4 findings per prompt (Fix / Accept / Defer / Ignore)
     ├── writes status markers after every batch
     └── fixes the Fix findings, marking each ✅ as it lands
+
+/handoff
+    ├── resolves the base branch, gathers git / gh / issue state
+    ├── merges into an existing *-HANDOFF.md, or writes a new one
+    └── every state claim names the command behind it
+
+/resume-handoff
+    ├── extracts each claim the handoff makes about the world
+    ├── re-runs the verifying command ── CONFIRMED / DRIFTED / UNVERIFIABLE
+    ├── rewrites the handoff in place with the drift recorded
+    └── prints what is genuinely still open, then stops
 ```
 
 ## Development

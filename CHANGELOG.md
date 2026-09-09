@@ -20,6 +20,17 @@ Rewritten as a pure-markdown plugin. No build step, no Node dependency, no MCP s
 
 ### Added
 
+- **`/handoff` and `/resume-handoff`**, a two-halved contract for carrying work across sessions.
+  `/handoff` writes the session's state to an untracked `<topic>-HANDOFF.md` — objective, scope,
+  what is verified versus merely written, decisions and the alternatives that lost, dead ends, open
+  questions and an ordered next-step checklist — with every claim about the branch, the pull request
+  or CI naming the command whose output it summarizes. A second run merges into the existing file
+  rather than clobbering it, and each pass records the model that wrote it. `/resume-handoff`
+  extracts those claims, re-runs the commands behind them, and marks each CONFIRMED, DRIFTED or
+  UNVERIFIABLE before rewriting the file in place; it also checks what the base branch absorbed
+  since capture, whether a peer session is already on the branch, and whether the artifacts the
+  handoff leans on still exist. It writes nothing but the handoff.
+
 - **`.claude/review-config.md` gained two prose sections**, both optional and both passed verbatim
   to every reviewer, bundled ones included. **Review Context** carries what a reviewer can't infer
   from the code — a migration in flight, an idiom that would otherwise read as a mistake.
