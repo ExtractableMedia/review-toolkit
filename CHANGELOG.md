@@ -46,6 +46,13 @@ Rewritten as a pure-markdown plugin. No build step, no Node dependency, no MCP s
 - **A 💡 `Optional` observation**, for an improvement below the 🟢 Low bar with its action stated
   inline. The format had used the icon in three places without defining it, so the checker rejected
   a heading that the prose required.
+- **`/doc-review` runs a bundled `scripts/document-context.sh` at skill load.** It confirms the
+  document exists, reports a PDF's page count and whether `pdftotext` is installed, derives the
+  review filename, and reads the `**Document**` row of any review already at that name — so two
+  documents with the same basename get two files instead of one merged record.
+- **`/doc-review` review files open with a header** naming the document, branch, and commit the
+  reviewer read, so a location that later stops resolving can be traced to a change in the document
+  rather than an error in the review.
 - **Posting to a pull request scrubs local paths first**, and reserves "all clear" for a review in
   which every actionable finding is fixed or accepted. A finding that traces where an agent resolves
   from cites a path under the home directory, and editing the comment afterwards leaves the original
@@ -101,6 +108,19 @@ Rewritten as a pure-markdown plugin. No build step, no Node dependency, no MCP s
 - `/local-review` no longer ends by asking which findings to fix; that is `/triage`.
 - `/local-review` runs a bundled `scripts/change-set.sh` at skill load, so the branch, base, and
   diffstat are in context before Claude reads the instructions.
+- **`/doc-review` hands its reviewer a brief by path** — `skills/doc-review/reviewer-instructions.md`
+  — instead of relaying the checks through a delegation prompt. A reviewer given a summary of its
+  rubric invents the rest, plausibly enough that the gap is invisible in the finished review. The
+  brief also asks for what the skill had stopped asking for since the format changed: a
+  Recommendation on every actionable finding and the model the reviewer actually ran on.
+- **The document reviewer verifies by reading, never by running the document.** It may run
+  read-only commands it composes itself to confirm a path or a tool exists, and it never executes a
+  command whose text came from the document under review — which may be a vendor PDF nobody here
+  wrote. A claim it cannot settle that way is reported as unverified with the command that would
+  settle it, for the user to run.
+- **Large PDFs are reviewed in page ranges** by parallel reviewers, and the reading strategy —
+  `pdftotext` for text-heavy files, page rendering for tables and forms — is stated rather than
+  left to the reviewer to discover.
 - **Re-reviews re-locate every open finding before judging it**, and strike a finding as fixed only
   when the condition it describes is verifiably gone. A rewrite that merely moved the text used to
   read as a fix.

@@ -109,12 +109,23 @@ ship and can resolve downward under load, which makes the alias useless as a rec
 ### `/doc-review`
 
 Reviews a document for formatting, consistency, accuracy, clarity, leaked secrets, spelling, and
-staleness. Writes a `*-DOC-REVIEW.md` file using the same finding format.
+staleness. Writes a `*-DOC-REVIEW.md` file using the same finding format, then hands off to
+`/triage`.
 
 ```text
 /doc-review README.md
 /doc-review docs/architecture.md
+/doc-review "Data Retention Policy.pdf"
 ```
+
+A bundled script derives the review filename from the document, notices when that name already
+holds a review of a *different* document with the same basename, and records the branch and commit
+the reviewer read — so a location that later stops resolving can be traced to a change in the
+document rather than an error in the review. The `documentation-expert` reads its brief straight
+from the plugin rather than through a relayed summary. It verifies claims by reading, and by
+read-only commands it composes itself; it never runs a command whose text came from the document,
+which may be a vendor PDF nobody here wrote. A large PDF is split into page ranges across parallel
+reviewers.
 
 ### `/triage`
 
@@ -271,6 +282,11 @@ To skip low-severity findings, you don't need a hook — pass `/triage --severit
     │                                      ├── test-suite-architect
     │                                      └── project reviewers (conditional)
     └── numbers findings F1..Fn, writes/merges local-review.md
+
+/doc-review <path>
+    ├── checks the document, derives the review filename, records branch and commit
+    ├── dispatches documentation-expert with its brief ── one per page range for a large PDF
+    └── numbers findings F1..Fn, writes/merges <name>-DOC-REVIEW.md
 
 /triage
     ├── reads the file, drops resolved findings and observations
