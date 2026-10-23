@@ -36,22 +36,24 @@ instead, and are written for people.
 
 There is no test suite. What can break is a manifest, a lint rule, or a prose invariant.
 
-- `claude plugin validate .` — checks the marketplace manifest. CI adds `--strict`.
 - `claude plugin validate` reads whichever manifest it finds first and `marketplace.json` wins, so
-  the plugin manifest and component frontmatter can only be validated from a copy that lacks it. A
-  local run of the command above therefore proves nothing about that second pass. Run it against a
-  copy, which leaves the working tree alone:
+  the plugin manifest and component frontmatter can only be validated from a copy that lacks it.
+  Validate both from one copy, which leaves the working tree alone:
 
   ```bash
   dest=$(mktemp -d)
   rsync -a --exclude .git/ ./ "$dest/"
-  rm "$dest/.claude-plugin/marketplace.json" "$dest/CLAUDE.md"
+  rm "$dest/CLAUDE.md"
+  claude plugin validate "$dest" --strict
+  rm "$dest/.claude-plugin/marketplace.json"
   claude plugin validate "$dest" --strict
   ```
 
-  This file is removed alongside the marketplace manifest because `--strict` warns that a root
-  `CLAUDE.md` is never loaded for people who install the plugin — true of the plugin, and not a
-  defect in a file written for contributors here. `.github/workflows/validate.yml` does the same.
+  This file is removed before either pass because `--strict` warns that a root `CLAUDE.md` is never
+  loaded for people who install the plugin — true of the plugin, and not a defect in a file written
+  for contributors here. The marketplace pass needs it gone too: `marketplace.json` sets
+  `"source": "./"`, so newer releases validate the plugin at the root alongside the marketplace, and
+  a bare `claude plugin validate . --strict` fails. `.github/workflows/validate.yml` does the same.
 - **Reproduce how CI invokes a change, not just the change.** A check that exercises the artifact
   and not the invocation passes locally and fails in CI. Two traps specific to this workflow's
   inline steps: Actions runs a `run:` block as `bash -e`, so a step asserting a non-zero exit needs
