@@ -45,7 +45,7 @@ headings_raw=$(grep -E '^### F[0-9]+' "$file")
 
 # Icon and label are one unit: the table in the spec pairs them, so 🔴 Observation is as wrong as an
 # invented label.
-labels='🔴 Critical|🟠 High Priority|🟡 Medium Priority|🟢 Low Priority|ℹ️ Observation'
+labels='🔴 Critical|🟠 High Priority|🟡 Medium Priority|🟢 Low Priority|ℹ️ Observation|💡 Optional'
 
 # 1. Heading grammar. Two shapes: open, or struck through with a status marker.
 while IFS= read -r line; do
@@ -78,7 +78,7 @@ only_table=$(comm -13 <(lex "$unique") <(lex "$table"))
 
 # 4. The checklist holds every actionable finding and no observation. A status marker may sit before
 # the ID or after the description; both are in use.
-observations=$(grep -E '^### F[0-9]+ (~~)?ℹ️' <<< "$headings_raw" \
+observations=$(grep -E '^### F[0-9]+ (~~)?(ℹ️|💡)' <<< "$headings_raw" \
   | grep -oE '^### F[0-9]+' | grep -oE '[0-9]+' | sort -n)
 actionable=$(comm -23 <(lex "$unique") <(lex "$observations"))
 checked=$(ids "$checklist_body" '^- \[[ x]\] [^F]*F[0-9]+')

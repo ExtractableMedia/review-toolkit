@@ -20,9 +20,11 @@ don't restate its rules elsewhere.
 | Icon | Label | Meaning |
 |------|-------|---------|
 | ℹ️ | `Observation` | A good pattern, thoughtful design choice, or architectural note worth recording. |
+| 💡 | `Optional` | Something reads correctly, but a small improvement below the 🟢 Low bar is available. State the action inline. It is noted so the option is visible, not to imply it should be taken. |
 
-Observations never appear in the checklist and are never triaged. Use them to give the review
-balance — a review that only lists problems misrepresents the change.
+Observations never appear in the checklist and are never triaged. Use ℹ️ to give the review
+balance — a review that only lists problems misrepresents the change — and keep genuine praise (ℹ️)
+distinct from latent suggestions (💡), so neither drowns out the other.
 
 ## Heading format
 
@@ -129,7 +131,7 @@ is the reviewer's advice. It is not consent.
 
 - ✅ `Fixed` is the one status that may be applied without asking. It asserts a fact about the code,
   verifiable by reading it.
-- ✅ `Accepted`, ⏸️ `Deferred`, and 🚫 `Ignored` assert that a decision was made, so they may only be
+- ☑️ `Accepted`, ⏸️ `Deferred`, and 🚫 `Ignored` assert that a decision was made, so they may only be
   written after the user confirms *that specific finding*. `/triage` is where that confirmation
   happens.
 - Everything else stays ❓ Open — including a finding the user has decided to fix, until the fix
@@ -216,14 +218,21 @@ Review files are updated in place, never regenerated. When the file already exis
 2. **Keep existing IDs.** Never renumber. F3 must mean the same thing in tomorrow's review that it
    meant today, because people cite these numbers in commit messages and PR threads.
 3. **Keep status markers** and their `**Status:**` lines intact.
-4. **Number new findings from the next free ID.** If F1–F7 exist, the next new finding is F8 — even
+4. **Re-locate every open finding before judging it.** Each location was written against an
+   earlier revision and may have moved. Find it in the current code or document and correct it in
+   place first; a location that no longer resolves is evidence the file changed, not that the
+   finding was addressed.
+5. **Number new findings from the next free ID.** If F1–F7 exist, the next new finding is F8 — even
    if F2 and F5 are resolved. Each enters at ❓ Open whatever its recommendation.
-5. **Don't re-raise a resolved finding.** If it's marked Fixed and the problem is genuinely back,
+6. **Don't re-raise a resolved finding.** If it's marked Fixed and the problem is genuinely back,
    reopen the *existing* finding by removing the strikethrough and noting the regression; don't file
    a duplicate.
-6. **Strike through findings that no longer apply** — the code was deleted or rewritten past
-   recognition — with a one-line explanation of why.
-7. **Append a review history entry** — see below.
+7. **Strike through findings that no longer apply** — the code was deleted or rewritten past
+   recognition — as ✅ Fixed, with a one-line explanation of why. Strikethrough marks a finding
+   decided, so it carries a status to stay countable, and ✅ is written only when the condition the
+   finding describes is verifiably gone. A rewrite that merely moved the text is not evidence of a
+   fix: that finding stays ❓ Open at its new location, with a note saying so.
+8. **Append a review history entry** — see below.
 
 ## Review history
 
@@ -311,3 +320,34 @@ gh pr comment --body-file "$comment_file"
 The summary line carries the state at a glance: `24 findings — 14 fixed, 2 ignored, 8 observations`.
 When every actionable finding is resolved, lead with that: `24 findings — 16 fixed, 8 observations —
 all clear`.
+
+"All clear" is the strongest claim the document makes, so it is the one to guard. Write it only when
+every actionable finding is ✅ Fixed or ☑️ Accepted. Deferred and ignored findings are off the
+pre-merge path but not resolved, and open ones are neither, so none of them fold into the fixed
+count — and never write it while a 🔴 Critical or 🟠 High sits at any other status. Name every
+bucket separately instead.
+
+### Scrub local paths before posting
+
+A review is written by an agent reading a developer machine, and a finding that traces where an
+agent or a command resolves from cites an absolute path under the home directory. Check at this
+step rather than trusting the review stage, because this is the step that publishes:
+
+```bash
+find . -maxdepth 1 \( -name 'local-review*.md' -o -name '*-DOC-REVIEW.md' \) \
+  -exec grep -nE '/Users/|/home/|/private/tmp/|/var/folders/' /dev/null {} + || true
+```
+
+`find` does the matching, so a pattern with no file behind it is an empty result rather than the
+shell error an unmatched glob raises under zsh, which aborts the whole command before the
+redirection applies. The `/dev/null` argument keeps `grep` printing the filename, and the `|| true`
+keeps a clean run from reading as a failure — `grep` exits 1 when it matches nothing. No output
+means nothing to scrub.
+
+Rewrite each hit **in the review file** before building the comment: `~`-prefixed when the path
+genuinely lies outside the repository, repo-relative when it does not. Editing the comment
+afterwards does not undo the disclosure — GitHub keeps the pre-edit revision in the comment's edit
+history, and the only complete remedy is to delete the comment and repost it under a new URL. A hit
+that is a placeholder carrying no real username, `/Users/<name>/…` quoted from a rule, is already
+redacted; leave it. And read what surrounds each hit: the patterns match paths, not secrets, so
+anything credential-shaped on the same line means stop and tell the user before posting anything.
