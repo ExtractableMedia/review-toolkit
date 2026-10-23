@@ -47,24 +47,29 @@ jobs:
           node "$(npm root -g)/@anthropic-ai/claude-code/install.cjs"
           claude --version
 
+      # Both validation passes run against one copy of the tree, made here and reused below.
       - name: Validate marketplace manifest
-        run: claude plugin validate . --strict
-
-      # `claude plugin validate` checks whichever manifest it finds first, and marketplace.json
-      # wins. Validate the plugin manifest and component frontmatter from a copy that doesn't have
-      # one.
-      - name: Validate plugin manifest
         run: |
           # Copy the whole tree rather than naming component directories: a hand-kept list is a
           # second manifest of the layout that nothing checks, and validating a subset still passes,
           # so an omission is invisible.
           dest="$RUNNER_TEMP/plugin-check"
           rsync -a --exclude .git/ ./ "$dest/"
-          # CLAUDE.md goes with it: --strict warns that a root CLAUDE.md is never loaded for the
-          # people who install the plugin. That is true, and not a defect in a file written for
-          # contributors to this repository — but leaving it in place fails the step, and dropping
-          # --strict to get past it would accept every future warning too.
-          rm "$dest/.claude-plugin/marketplace.json" "$dest/CLAUDE.md"
+          # CLAUDE.md is dropped before either pass: --strict warns that a root CLAUDE.md is never
+          # loaded for the people who install the plugin. That is true, and not a defect in a file
+          # written for contributors to this repository — but leaving it in place fails the step,
+          # and dropping --strict to get past it would accept every future warning too. The
+          # marketplace pass needs this as much as the plugin pass: marketplace.json sets
+          # "source": "./", so newer releases validate the plugin at the root alongside it.
+          rm "$dest/CLAUDE.md"
+          claude plugin validate "$dest" --strict
+
+      # `claude plugin validate` checks whichever manifest it finds first, and marketplace.json
+      # wins. Validate the plugin manifest and component frontmatter once it is gone.
+      - name: Validate plugin manifest
+        run: |
+          dest="$RUNNER_TEMP/plugin-check"
+          rm "$dest/.claude-plugin/marketplace.json"
           claude plugin validate "$dest" --strict
 
       - name: Check bundled scripts are executable
